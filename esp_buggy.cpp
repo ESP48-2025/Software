@@ -20,3 +20,10 @@ class Motor{
 //I did something
 //I did something again
 // Yang was here
+
+
+
+
+
+//Once upon a time, there was a C++
+//One day, a developer forgot a semicolon... oh no
