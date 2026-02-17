@@ -28,3 +28,4 @@ class Motor{
 //Once upon a time, there was a C++
 //One day, a developer forgot a semicolon... oh no
 //pushing to devs\fvargekibsh
+// this is a test comment
