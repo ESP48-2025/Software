@@ -1,31 +1,98 @@
 #include "mbed.h"
+#include "C12832.h"
 
-class Motor{
-    private:
-        PwmOut pwm, dir;
-        DigitalOut mode, enable;
-    public:
-        Motor(PinName p, PinName d, PinName m, PinName e):
-        pwm(p), dir(d), mode(m), enable(e){
-            enable = 0;
-            
-        }
+// ---- LCD ----
+C12832 lcd(D11, D13, D12, D7, D10);
+
+// ---- Potentiometer Class ----
+class Potentiometer {
+private:
+    AnalogIn inputSignal;
+    float VDD, currentSampleNorm, currentSampleVolts;
+public:
+    Potentiometer(PinName pin, float v) : inputSignal(pin), VDD(v) {}
+
+    float amplitudeVolts(void) { return (inputSignal.read() * VDD); }
+    float amplitudeNorm(void)  { return inputSignal.read(); }
+
+    void sample(void) {
+        currentSampleNorm  = inputSignal.read();
+        currentSampleVolts = currentSampleNorm * VDD;
+    }
+    const float getCurrentSampleNorm(void)  { return currentSampleNorm; }
+    const float getCurrentSampleVolts(void) { return currentSampleVolts; }
 };
-//does this upload eygwabrilkgwgeiuaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
-//attempt2
-//osjvjdvsvnd
-//shbaisbiafb
-//something something update
-//I did something
-//I did something again
-// Yang was here
+// ---- Motor Class (enable removed — handled globally) ----
+class Motor {
+private:
+    PwmOut pwm, dir;
+    DigitalOut mode;
+public:
+    Motor(PinName p, PinName d, PinName m):
+        pwm(p), dir(d), mode(m) {}
 
+    float get_duty(void)             { return pwm; }
+    float get_dir(void)              { return dir; }
+    bool  get_mode(void)             { return mode; }
+    void  bipolar_mode(bool tf)      { mode.write(tf); }
+    void  pwm_period(float us)       { pwm.period_us(50);}
+    void  is_forward(bool direction) { dir.write(direction); }
+    void  speed(float percent_speed) { pwm.write(percent_speed); }
+};
 
+// ---- clamp helper ----
+float clamp(float val, float minVal, float maxVal) {
+    if (val < minVal) return minVal;
+    if (val > maxVal) return maxVal;
+    return val;
+}
 
+// ---- Single shared enable pin ----
+DigitalOut motorEnable(PA_15);
 
+// ---- Motor objects (no enable pin passed) ----
+Motor motorLeft (PB_13, PB_14, PC_5);
+Motor motorRight(D2, D3, PC_6);
 
-//Once upon a time, there was a C++
-//One day, a developer forgot a semicolon... oh no
-//pushing to devs\fvargekibsh
-// this is a test comment
+// ---- Potentiometer objects ----
+Potentiometer potLeft (A0, 3.3f);
+Potentiometer potRight(A1, 3.3f);
+
+int main(void) {
+    // Enable both motors via single shared pin
+    motorEnable.write(1);
+
+    motorLeft.bipolar_mode(1);
+    motorRight.bipolar_mode(1);
+
+    motorLeft.pwm_period(50);
+    motorLeft.is_forward(1);
+
+    motorRight.pwm_period(50);
+    motorRight.is_forward(1);
+
+    lcd.cls();
+    lcd.locate(0, 0);
+    lcd.printf("Buggy Ready");
+    wait_ms(1000);
+
+    while(1) {
+        potLeft.sample();
+        potRight.sample();
+
+        float leftSpeed  = clamp(potLeft.getCurrentSampleNorm(),  0.0f, 1.0f);
+        float rightSpeed = clamp(potRight.getCurrentSampleNorm(), 0.0f, 1.0f);
+
+        motorLeft.speed(leftSpeed);
+        motorRight.speed(rightSpeed);
+
+        lcd.cls();
+        lcd.locate(0, 0);
+        lcd.printf("L:%.2f R:%.2f", leftSpeed, rightSpeed);
+        lcd.locate(0, 16);
+        lcd.printf("Lv:%.1fV Rv:%.1fV", potLeft.getCurrentSampleVolts(), potRight.getCurrentSampleVolts());
+
+        wait_ms(50);
+    }
+}
