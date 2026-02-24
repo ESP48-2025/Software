@@ -59,6 +59,46 @@ Motor motorRight(D2, D3, PC_6);
 Potentiometer potLeft (A0, 3.3f);
 Potentiometer potRight(A1, 3.3f);
 
+#define CPR 511  
+
+class Encoder {
+public:
+    Encoder(PinName pinA, PinName pinB)
+        : A(pinA), B(pinB)
+    {
+        count = 0;
+        A.rise(callback(this, &Encoder::onA));
+        A.fall(callback(this, &Encoder::onA));
+        sampler.attach(callback(this, &Encoder::getCps), 1/sampling_freq);
+    }
+
+    void reset() { count = 0; }
+    int getCount() const { return count; }
+    float getCps() const {return cps;}
+    float getRpm(int cpr) {return (cps/cpr*60);}
+    
+
+private:
+    InterruptIn A;
+    InterruptIn B;
+    volatile int count;
+    Ticker sampler;
+    float sampling_freq, cps;
+
+    void onA() {
+        if (A.read() == B.read()) count++;
+        else count--;
+    }
+    void getCps() {
+        cps = count*sampling_freq;
+        reset();
+    }
+};
+
+Encoder encLeft(PC_14, PC_15);
+Encoder encRight(PB_8, PB_9);
+
+
 int main(void) {
     // Enable both motors via single shared pin
     motorEnable.write(1);
@@ -71,6 +111,19 @@ int main(void) {
 
     motorRight.pwm_period(50);
     motorRight.is_forward(1);
+
+
+    encLeft.reset();
+    encRight.reset();
+
+    int lastL = 0;
+    int lastR = 0;
+
+    float rpmL = 0.0f;
+    float rpmR = 0.0f;
+
+    float rpmL_buffer, rpmR_buffer;
+    
 
     lcd.cls();
     lcd.locate(0, 0);
@@ -87,12 +140,87 @@ int main(void) {
         motorLeft.speed(leftSpeed);
         motorRight.speed(rightSpeed);
 
-        lcd.cls();
-        lcd.locate(0, 0);
-        lcd.printf("L:%.2f R:%.2f", leftSpeed, rightSpeed);
-        lcd.locate(0, 16);
-        lcd.printf("Lv:%.1fV Rv:%.1fV", potLeft.getCurrentSampleVolts(), potRight.getCurrentSampleVolts());
+        
+        rpmL = encLeft.getRpm(CPR);
+        rpmR = encRight.getRpm(CPR);
 
-        wait_ms(50);
+
+        // refresh
+        if (abs(rpmL - rpmL_buffer) < 0.05 || abs(rpmR - rpmR_buffer) < 0.05){
+            
+        }
+        else{
+            lcd.cls();
+            //motor
+            lcd.locate(0, 0);
+            lcd.printf("L:%.2f R:%.2f", leftSpeed, rightSpeed);
+            lcd.locate(0, 16);
+            lcd.printf("Lv:%.1fV Rv:%.1fV", potLeft.getCurrentSampleVolts(), potRight.getCurrentSampleVolts());
+
+            //encoder
+            lcd.locate(0,20);
+            lcd.printf("L rpm:%.1f", rpmL);
+            lcd.locate(60,20);
+            lcd.printf("R rpm:%.1f", rpmR);
+
+        }
+        
+        rpmL_buffer = rpmL;
+        rpmR_buffer = rpmR;
+
+        // wait_ms(50);
+    }
+}
+
+
+
+int main() {
+
+
+    while (1) {
+
+        // int L = encLeft.getCount();
+        // int R = encRight.getCount();
+
+        // int deltaL = L - lastL;
+        // int deltaR = R - lastR;
+
+        // lastL = L;
+        // lastR = R;
+
+        // rpmL = ((float)deltaL / (float)CPR) * 600.0f;
+        // rpmR = ((float)deltaR / (float)CPR) * 600.0f;
+
+        // if (rpmL < 0) rpmL = -rpmL;
+        // if (rpmR < 0) rpmR = -rpmR;
+
+        rpmL = encLeft.getRpm(CPR);
+        rpmR = encRight.getRpm(CPR);
+        
+
+        
+        // lcd.locate(0,0);
+        // lcd.printf("L pulse:%d", L);
+
+        // lcd.locate(0,10);
+        // lcd.printf("R pulse:%d", R);
+
+        
+        // refresh
+        if (abs(rpmL - rpmL_buffer) < 0.05 || abs(rpmR - rpmR_buffer) < 0.05){
+            
+        }
+        else{
+            lcd.cls();
+            lcd.locate(0,20);
+            lcd.printf("L rpm:%.1f", rpmL);
+    
+            lcd.locate(60,20);
+            lcd.printf("R rpm:%.1f", rpmR);
+
+        }
+        rpmL_buffer = rpmL;
+        rpmR_buffer = rpmR;
+        // wait_ms(100);
     }
 }
