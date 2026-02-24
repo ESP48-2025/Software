@@ -1,3 +1,4 @@
+
 #include "mbed.h"
 #include "C12832.h"
 
@@ -63,8 +64,8 @@ Potentiometer potRight(A1, 3.3f);
 
 class Encoder {
 public:
-    Encoder(PinName pinA, PinName pinB)
-        : A(pinA), B(pinB)
+    Encoder(PinName pinA, PinName pinB, float sam_f)
+        : A(pinA), B(pinB), sampling_freq(sam_f)
     {
         count = 0;
         A.rise(callback(this, &Encoder::onA));
@@ -95,8 +96,8 @@ private:
     }
 };
 
-Encoder encLeft(PC_14, PC_15);
-Encoder encRight(PB_8, PB_9);
+Encoder encLeft(PC_14, PC_15, 20);
+Encoder encRight(PB_8, PB_9, 20);
 
 
 int main(void) {
@@ -112,6 +113,7 @@ int main(void) {
     motorRight.pwm_period(50);
     motorRight.is_forward(1);
 
+    float last_pot_L, last_pot_R;
 
     encLeft.reset();
     encRight.reset();
@@ -134,6 +136,10 @@ int main(void) {
         potLeft.sample();
         potRight.sample();
 
+        last_pot_L = potLeft.getCurrentSampleNorm();
+        last_pot_R = potRight.getCurrentSampleNorm();
+        
+
         float leftSpeed  = clamp(potLeft.getCurrentSampleNorm(),  0.0f, 1.0f);
         float rightSpeed = clamp(potRight.getCurrentSampleNorm(), 0.0f, 1.0f);
 
@@ -144,17 +150,11 @@ int main(void) {
         rpmL = encLeft.getRpm(CPR);
         rpmR = encRight.getRpm(CPR);
 
-
-        // refresh
-        if (abs(rpmL - rpmL_buffer) < 0.05 || abs(rpmR - rpmR_buffer) < 0.05){
-            
-        }
-        else{
-            lcd.cls();
+            lcd.cls(); 
             //motor
             lcd.locate(0, 0);
             lcd.printf("L:%.2f R:%.2f", leftSpeed, rightSpeed);
-            lcd.locate(0, 16);
+            lcd.locate(64, 0);
             lcd.printf("Lv:%.1fV Rv:%.1fV", potLeft.getCurrentSampleVolts(), potRight.getCurrentSampleVolts());
 
             //encoder
@@ -163,7 +163,27 @@ int main(void) {
             lcd.locate(60,20);
             lcd.printf("R rpm:%.1f", rpmR);
 
-        }
+        wait_ms(100);
+
+        // refresh
+        // if (abs(rpmL - rpmL_buffer) < 0.05 || abs(rpmR - rpmR_buffer) < 0.05 || abs(potLeft.getCurrentSampleNorm()-last_pot_L) < 0.00005 || abs(potRight.getCurrentSampleNorm()-last_pot_R) < 0.00005){
+            
+        // }
+        // else{
+        //     lcd.cls();
+        //     //motor
+        //     lcd.locate(0, 0);
+        //     lcd.printf("L:%.2f R:%.2f", leftSpeed, rightSpeed);
+        //     lcd.locate(0, 16);
+        //     lcd.printf("Lv:%.1fV Rv:%.1fV", potLeft.getCurrentSampleVolts(), potRight.getCurrentSampleVolts());
+
+        //     //encoder
+        //     lcd.locate(0,20);
+        //     lcd.printf("L rpm:%.1f", rpmL);
+        //     lcd.locate(60,20);
+        //     lcd.printf("R rpm:%.1f", rpmR);
+
+        // }
         
         rpmL_buffer = rpmL;
         rpmR_buffer = rpmR;
@@ -173,54 +193,3 @@ int main(void) {
 }
 
 
-
-int main() {
-
-
-    while (1) {
-
-        // int L = encLeft.getCount();
-        // int R = encRight.getCount();
-
-        // int deltaL = L - lastL;
-        // int deltaR = R - lastR;
-
-        // lastL = L;
-        // lastR = R;
-
-        // rpmL = ((float)deltaL / (float)CPR) * 600.0f;
-        // rpmR = ((float)deltaR / (float)CPR) * 600.0f;
-
-        // if (rpmL < 0) rpmL = -rpmL;
-        // if (rpmR < 0) rpmR = -rpmR;
-
-        rpmL = encLeft.getRpm(CPR);
-        rpmR = encRight.getRpm(CPR);
-        
-
-        
-        // lcd.locate(0,0);
-        // lcd.printf("L pulse:%d", L);
-
-        // lcd.locate(0,10);
-        // lcd.printf("R pulse:%d", R);
-
-        
-        // refresh
-        if (abs(rpmL - rpmL_buffer) < 0.05 || abs(rpmR - rpmR_buffer) < 0.05){
-            
-        }
-        else{
-            lcd.cls();
-            lcd.locate(0,20);
-            lcd.printf("L rpm:%.1f", rpmL);
-    
-            lcd.locate(60,20);
-            lcd.printf("R rpm:%.1f", rpmR);
-
-        }
-        rpmL_buffer = rpmL;
-        rpmR_buffer = rpmR;
-        // wait_ms(100);
-    }
-}
