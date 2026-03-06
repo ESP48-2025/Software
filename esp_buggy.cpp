@@ -79,7 +79,7 @@ int main(void){
 
     float tcrt_array[6] = {0};
 
-    Darlington EnTcrt();    // 6 pins to sync enable
+    Darlington EnTcrt(PB_12, PA_11, PA_12, D5, D6, D0);    // 6 pins to sync enable
 
     wait(3);
 
