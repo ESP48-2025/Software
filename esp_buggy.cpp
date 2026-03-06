@@ -1,7 +1,5 @@
 #include "mbed.h"
 #include "C12832.h"
-#include "mbed2/299/TARGET_NUCLEO_F401RE/TARGET_STM/TARGET_STM32F4/TARGET_NUCLEO_F401RE/PinNames.h"
-
 class TCRT                                                   //Begin updated potentiometer class definition
 {
 
@@ -44,6 +42,32 @@ public:                                                                 // Publi
 
 };
 
+class Darlington{
+    private:
+        BusOut enable_tcrt;
+        // DigitalOut en0, en1, en2, en3, en4, en5;
+
+    public:
+        Darlington(PinName LLL, PinName LL, PinName L, PinName R, PinName RR, PinName RRR): enable_tcrt(LLL, LL, L, R, RR, RRR)
+        // en0(LLL), en1(LL), en2(L), en3(R), en4(RR), en5(RRR)
+        
+        {
+            writeAll(0b000000);
+            // en0 = enable_tcrt[0];
+            // en1 = enable_tcrt[1];
+            // en2 = enable_tcrt[2];
+            // en3 = enable_tcrt[3];
+            // en4 = enable_tcrt[4];
+            // en5 = enable_tcrt[5];
+        }
+        void writeAll(int zero_b_int){
+            enable_tcrt = zero_b_int;
+        }
+        void writeSingle (int index, int value){
+            enable_tcrt[index] = value;
+        }
+};
+
 
 int main(void){
     TCRT SenseLLL(A0, 3.3, 20000);
@@ -52,6 +76,22 @@ int main(void){
     TCRT SenseR(A3, 3.3, 20000);
     TCRT SenseRR(A4, 3.3, 20000);
     TCRT SenseRRR(A5, 3.3, 20000);
+
+    float tcrt_array[6] = {0};
+
+    Darlington EnTcrt();    // 6 pins to sync enable
+
+    wait(3);
+
+
+    while(1){
+        tcrt_array[0] = SenseLLL.getCurrentSampleNorm();
+        tcrt_array[1] = SenseLL.getCurrentSampleNorm();
+        tcrt_array[2] = SenseL.getCurrentSampleNorm();
+        tcrt_array[3] = SenseR.getCurrentSampleNorm();
+        tcrt_array[4] = SenseRR.getCurrentSampleNorm();
+        tcrt_array[5] = SenseRRR.getCurrentSampleNorm();
+    }
     
 
 }
