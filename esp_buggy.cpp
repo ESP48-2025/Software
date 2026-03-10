@@ -1,96 +1,114 @@
 #include "mbed.h"
 #include "C12832.h"
-class TCRT                                                   //Begin updated potentiometer class definition
+
+class TCRT                                                              //Begin updated potentiometer class definition
 {
 
 private:                                                                //Private data member declaration
-    AnalogIn inputSignal;                                               //Declaration of AnalogIn object
-    float VDD, currentSampleNorm, currentSampleVolts, sample_freq;                   //Float variable to speficy the value of VDD (3.3 V for the Nucleo-64)
+    AnalogIn a0, a1, a2, a3, a4, a5;                                    //Declaration of AnalogIn object
+    float VDD, sample_freq;                                             //Float variable to speficy the value of VDD (3.3 V for the Nucleo-64)
+    // float currentSampleNorm, currentSampleVolts
+    float tcrt_array_norm[6], tcrt_array_volt[6];
     Ticker sampler;
 
 public:                                                                 // Public declarations
-    TCRT(PinName pin, float v, float f) : inputSignal(pin), VDD(v), sample_freq(f) {
+    TCRT(PinName pin0, PinName pin1, PinName pin2, PinName pin3, PinName pin4, PinName pin5, float f):
+                a0(pin0),       a1(pin0),     a2(pin0),     a3(pin0),       a4(pin0),   a5(pin0), sample_freq(f) {
         sample_freq = 20000;
         sampler.attach(callback(this, &TCRT::sample), 1/sample_freq);
+        VDD = 3.3;
     }   //Constructor - user provided pin name assigned to AnalogIn...
                                                                         //VDD is also provided to determine maximum measurable voltage
-    float amplitudeVolts(void)                                          //Public member function to measure the amplitude in volts
-    {
-        return (inputSignal.read()*VDD);                                //Scales the 0.0-1.0 value by VDD to read the input in volts
+    void set_vdd(float vdd){
+        VDD = vdd;
     }
 
-    float amplitudeNorm(void)                                           //Public member function to measure the normalised amplitude
-    {
-        return inputSignal.read();                                      //Returns the ADC value normalised to range 0.0 - 1.0
+    void sample(void){                                                  //Public member function to read a sample and store the value as data members
+        tcrt_array_norm[0] = a0.read();                                 //Read a sample from the ADC and store normalised representation [0..1]
+        tcrt_array_norm[1] = a1.read();
+        tcrt_array_norm[2] = a2.read();
+        tcrt_array_norm[3] = a3.read();
+        tcrt_array_norm[4] = a4.read();
+        tcrt_array_norm[5] = a5.read();
+
+        for (int i = 0; i < 6; i++){
+            tcrt_array_volt[i] = tcrt_array_norm[i] * VDD;              //Convert this to a voltage and store that as a data member too.
+        }               
     }
 
-    void sample(void)                                                   //Public member function to read a sample and store the value as data members
-    {
-        currentSampleNorm = inputSignal.read();                         //Read a sample from the ADC and store normalised representation [0..1]
-        currentSampleVolts = currentSampleNorm*VDD;                     //Convert this to a voltage and store that as a data member too.
+    const float getCurrentSampleNorm(int tcrt_index){                   //Public member function to return the most recent normalised sample [0..1]
+        return tcrt_array_norm[tcrt_index];                             //Return the most recent normalised sample
     }
 
-    const float getCurrentSampleNorm(void)                              //Public member function to return the most recent normalised sample [0..1]
-    {
-        return currentSampleNorm;                                       //Return the most recent normalised sample
-    }
-
-    const float getCurrentSampleVolts(void)                             //Public member function to return the most recent sampled voltage [0.. 3.3 V]
-    {
-        return currentSampleVolts;                                      //Return the most recent sampled voltage
+    const float getCurrentSampleVolts(int tcrt_index){                  //Public member function to return the most recent sampled voltage [0.. 3.3 V]
+        return tcrt_array_volt[tcrt_index];                             //Return the most recent sampled voltage
     }
 
 };
+
 
 class Darlington{
     private:
-        BusOut enable_tcrt;
-        // DigitalOut en0, en1, en2, en3, en4, en5;
-
+        DigitalOut en0, en1, en2, en3, en4, en5;
     public:
-        Darlington(PinName LLL, PinName LL, PinName L, PinName R, PinName RR, PinName RRR): enable_tcrt(LLL, LL, L, R, RR, RRR)
-        // en0(LLL), en1(LL), en2(L), en3(R), en4(RR), en5(RRR)
-        
+        Darlington(PinName LLL, PinName LL, PinName L, PinName R, PinName RR, PinName RRR): en0(LLL), en1(LL), en2(L), en3(R), en4(RR), en5(RRR)
         {
-            writeAll(0b000000);
-            // en0 = enable_tcrt[0];
-            // en1 = enable_tcrt[1];
-            // en2 = enable_tcrt[2];
-            // en3 = enable_tcrt[3];
-            // en4 = enable_tcrt[4];
-            // en5 = enable_tcrt[5];
+            writeAll(0, 0, 0, 0, 0, 0);
         }
-        void writeAll(int zero_b_int){
-            enable_tcrt = zero_b_int;
+        void writeAll(bool Left_most, bool pin1, bool pin2, bool pin3, bool pin4, bool Right_most){
+            en0.write(Left_most);
+            en1.write(pin1);
+            en2.write(pin2);
+            en3.write(pin3);
+            en4.write(pin4);
+            en5.write(Right_most);
         }
-        void writeSingle (int index, int value){
-            enable_tcrt[index] = value;
+        void writeSingle(int pin_from_left, bool logic_value){
+            switch (pin_from_left){
+                case 0:
+                    en0.write(logic_value);
+                    break;
+                case 1:
+                    en1.write(logic_value);
+                    break;
+                case 2:
+                    en2.write(logic_value);
+                    break;
+                case 3:
+                    en3.write(logic_value);
+                    break;
+                case 4:
+                    en4.write(logic_value);
+                    break;
+                case 5:
+                    en5.write(logic_value);
+                    break;
+                default:
+                    break;
+            }
         }
 };
 
 
+
 int main(void){
-    TCRT SenseLLL(A0, 3.3, 20000);
-    TCRT SenseLL(A1, 3.3, 20000);
-    TCRT SenseL(A2, 3.3, 20000);
-    TCRT SenseR(A3, 3.3, 20000);
-    TCRT SenseRR(A4, 3.3, 20000);
-    TCRT SenseRRR(A5, 3.3, 20000);
-
-    float tcrt_array[6] = {0};
-
-    Darlington EnTcrt(PB_12, PA_11, PA_12, D5, D6, D0);    // 6 pins to sync enable
-
+    TCRT IRSensors(A0, A1, A2, A3, A4, A5, 20000);
+    
+    Darlington EnTcrt(PC_8, PA_11, PA_12, D5, D3, D2);    // 6 pins to sync enable
     wait(3);
 
-
     while(1){
-        tcrt_array[0] = SenseLLL.getCurrentSampleNorm();
-        tcrt_array[1] = SenseLL.getCurrentSampleNorm();
-        tcrt_array[2] = SenseL.getCurrentSampleNorm();
-        tcrt_array[3] = SenseR.getCurrentSampleNorm();
-        tcrt_array[4] = SenseRR.getCurrentSampleNorm();
-        tcrt_array[5] = SenseRRR.getCurrentSampleNorm();
+        EnTcrt.writeAll(1, 1, 1, 1, 1, 1);
+
+        //NOTE: USE FOR LOOP TO STORE TCRT SAMPLES INTO AN ARRAY
+
+        //COMMENTS BELOW ARE NOT ACCURATE
+        // IRSensors[0] = SenseLLL.getCurrentSampleNorm();
+        // IRSensors[1] = SenseLL.getCurrentSampleNorm();
+        // IRSensors[2] = SenseL.getCurrentSampleNorm();
+        // IRSensors[3] = SenseR.getCurrentSampleNorm();
+        // IRSensors[4] = SenseRR.getCurrentSampleNorm();
+        // IRSensors[5] = SenseRRR.getCurrentSampleNorm();
     }
     
 
