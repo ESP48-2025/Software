@@ -92,24 +92,18 @@ class Darlington{
 
 
 int main(void){
-    TCRT IRSensors(A0, A1, A2, A3, A4, A5, 20000);
+    TCRT IRSensors(A0, A1, A2, A3, A4, A5, 20000);      // Initiate tcrt output and operating frequency (from left most)
+    float IRdata[6];
     
-    Darlington EnTcrt(PC_8, PA_11, PA_12, D5, D3, D2);    // 6 pins to sync enable
+    Darlington EnTcrt(PC_8, PA_11, PA_12, D5, D3, D2);  // Initiate enable input (from left most), default 0
     wait(3);
 
     while(1){
-        EnTcrt.writeAll(1, 1, 1, 1, 1, 1);
+        EnTcrt.writeAll(1, 1, 1, 1, 1, 1);              // enable all
 
-        //NOTE: USE FOR LOOP TO STORE TCRT SAMPLES INTO AN ARRAY
-
-        //COMMENTS BELOW ARE NOT ACCURATE
-        // IRSensors[0] = SenseLLL.getCurrentSampleNorm();
-        // IRSensors[1] = SenseLL.getCurrentSampleNorm();
-        // IRSensors[2] = SenseL.getCurrentSampleNorm();
-        // IRSensors[3] = SenseR.getCurrentSampleNorm();
-        // IRSensors[4] = SenseRR.getCurrentSampleNorm();
-        // IRSensors[5] = SenseRRR.getCurrentSampleNorm();
+        for (int i = 0; i < 6; i++){                    // read norminal IR sample into an array
+            IRdata[i] = IRSensors.getCurrentSampleNorm(i);
+        }
     }
     
-
 }
