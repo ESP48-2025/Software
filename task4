@@ -1,4 +1,5 @@
 #include "mbed.h"
+#include "mbed2/299/TARGET_NUCLEO_F401RE/TARGET_STM/TARGET_STM32F4/TARGET_NUCLEO_F401RE/PinNames.h"
 // Serial communication to PC
 Serial pc(USBTX, USBRX);
 
@@ -11,12 +12,12 @@ AnalogIn SenseRR(A4);
 AnalogIn SenseRRR(A5);
 
 // Enable pins for sensors
-DigitalOut en0(PC_8);
-DigitalOut en1(PA_11);
-DigitalOut en2(PA_12);
-DigitalOut en3(D5);
-DigitalOut en4(D3);
-DigitalOut en5(D2);
+DigitalOut en0(D2);
+DigitalOut en1(D3);
+DigitalOut en2(D8);
+DigitalOut en3(D9);
+DigitalOut en4(PA_15);
+DigitalOut en5(PA_14);
 
 int main(){
     pc.baud(115200);
