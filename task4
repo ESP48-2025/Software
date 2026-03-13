@@ -1,0 +1,46 @@
+#include "mbed.h"
+// Serial communication to PC
+Serial pc(USBTX, USBRX);
+
+// Analog inputs for sensors
+AnalogIn SenseLLL(A0);
+AnalogIn SenseLL(A1);
+AnalogIn SenseL(A2);
+AnalogIn SenseR(A3);
+AnalogIn SenseRR(A4);
+AnalogIn SenseRRR(A5);
+
+// Enable pins for sensors
+DigitalOut en0(D2);
+DigitalOut en1(D3);
+DigitalOut en2(D8);
+DigitalOut en3(D9);
+DigitalOut en4(PA_15);
+DigitalOut en5(PA_14);
+
+int main(){
+    pc.baud(115200);
+
+    // Enable all sensors
+    en0 = 1;
+    en1 = 1;
+    en2 = 1;
+    en3 = 1;
+    en4 = 1;
+    en5 = 1;
+
+    while (1)
+    {
+        float s0 = SenseLLL.read();
+        float s1 = SenseLL.read();
+        float s2 = SenseL.read();
+        float s3 = SenseR.read();
+        float s4 = SenseRR.read();
+        float s5 = SenseRRR.read();
+
+        pc.printf("LLL: %.2f  LL: %.2f  L: %.2f  R: %.2f  RR: %.2f  RRR: %.2f\r\n",
+        s0, s1, s2, s3, s4, s5);
+        wait(0.1);
+
+    }
+}
