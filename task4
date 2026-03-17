@@ -3,8 +3,8 @@
 Serial pc(USBTX, USBRX);
 
 // Analog inputs for sensors
-AnalogIn SenseLLL(PC_3);
-AnalogIn SenseLL(PC_2);
+AnalogIn SenseLLL(PC_2);
+AnalogIn SenseLL(PC_3);
 AnalogIn SenseL(A2);
 AnalogIn SenseR(A3);
 AnalogIn SenseRR(A4);
