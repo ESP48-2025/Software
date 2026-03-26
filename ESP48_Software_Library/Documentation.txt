@@ -1,0 +1,40 @@
+#include "mbed.h"
+//------------------------------
+/*
+Bluetooth Class inherits the mbed Serial Class and provides simple functions
+to transmit to and receive from another bluetooth user.
+
+Main contributers: Yijun Hao
+
+Last updated: 26/03/2026
+*/
+#include "Bluetooth.h"
+
+Bluetooth ble()  // initialise bluetooth object named 'ble', pins are predefined for our buggy use
+
+ble.begin()  // initiates communication frequency. Make sure the connected device uses the same frequency (default 9600)
+
+ble.sendWords()
+
+
+#include "EncoderClass.h"
+/*
+Encoder Class regularly samples counts per second to return directional rpm, velocity and cumulative count
+
+Main contributors: Yijun Hao, Yang Cheng, (Nelson Hamilton)
+*/
+Encoder enc1(PC_10, PC_12, 20);     // initiates using (PinName) pinA as PC_10, (PinName) pinB as PC_12, (float) sampling frequency at 20 Hz
+
+enc1.reset();       // resets count variable, used internally when sampling
+
+enc1.setwheelsize(3.97);    // sets (float) wheel radius to calculate wheel velocity as 3.97 m (default 0.04 m)
+
+enc1.setCpr(600);   // sets (int) counts measured by your encoder per revolution of your wheel as 600 (default 511)
+
+enc1.getCount();    // returns (int) count variable: 'count' incriments and decriments depending on direction
+
+enc1.returnCps();   // returns (float) cps variable: 'cps' is internally sampled
+
+enc1.getRpm();      // returns (float) rotation per minute, use setCpr first if your encoder does not have 511 counts per wheel rotation
+
+enc1.getVel();      // returns (float) velocity calculated from rpm and wheel radius
