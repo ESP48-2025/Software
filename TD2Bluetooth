@@ -1,19 +1,53 @@
 #include "mbed.h"
 
-Serial hm10(PA_11, PA_12);   
+class Bluetooth {
+private:
+    Serial hm10;
+
+public:
+    Bluetooth() : hm10(PA_11, PA_12) {}
+
+    void begin() {
+        hm10.baud(9600);
+    }
+
+    void sendWords(const char* text) {
+        hm10.printf("%s\r\n", text);
+    }
+
+    bool available() {
+        return hm10.readable();
+    }
+
+    char readChar() {
+        return hm10.getc();
+    }
+};
+
+Bluetooth hm10_Bluetooth;
 DigitalOut led(LED2);
 
 int main() {
-    hm10.baud(9600);
+    hm10_Bluetooth.begin();
+    led = 0;
+
+    hm10_Bluetooth.sendWords("Send 1 to turn LED on");
+    hm10_Bluetooth.sendWords("Send 0 to turn LED off");
 
     while (1) {
-        if (hm10.readable()) {
-            char data = hm10.getc();
+        if (hm10_Bluetooth.available()) {
+            char data = hm10_Bluetooth.readChar();
 
-            if (data != 0) {
+            if (data == '1') {
                 led = 1;
-            } else {
+                hm10_Bluetooth.sendWords("LED ON");
+            }
+            else if (data == '0') {
                 led = 0;
+                hm10_Bluetooth.sendWords("LED OFF");
+            }
+            else {
+                hm10_Bluetooth.sendWords("Undefined command");
             }
         }
     }
