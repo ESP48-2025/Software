@@ -50,3 +50,72 @@ enc1.getRpm();      // returns (float) rotation per minute, use setCpr first if 
                     // does not have 511 counts per wheel rotation
 
 enc1.getVel();      // returns (float) velocity calculated from rpm and wheel radius
+
+//-----------------------------------
+/*
+IR array consists of 2 classes: TCRT and Darlington, corresponging to the sensor shield components
+
+Main Contributors: Yang Cheng
+
+Last updated: 24/03/2026
+*/
+#include "IR_array.h"
+/*
+#WARNING# THIS CLASS IS A WORK IN PROGRESS, DEBUGGING REQUIRED
+TCRT Class sets up the 6-sensor IR array, regularly samples each sensor's normalised readings into (float[6]) tcrt_array_norm and relative voltage readings into (float[6]) tcrt_array_volt.
+Users should connect pins that allow analogue input.
+*/
+TCRT IRarray(A0, A1, A2, A3, A4, A5, 10);    // constructs using (PinName) analogue pins, 1 pin per sensor excluding
+                                            // power pins. (float) frequency is set as 10 Hz (default 20000 Hz)
+
+IRarray.set_vdd(3.2);    // sets (float) maximum sensor output voltage as 3.2 V (default 3.3 V)
+
+IRarray.sample();    // updates (float[6]) tcrt_array_norm and (float[6]) tcrt_array_volt,
+                    // updated internally with preset sampling period.
+
+IRarray.getCurrentSampleNorm(1);    // returns index 1 of tcrt_array_norm (index vary from 0 to 5)
+
+IRarray.getCurrentSampleVolts(3);    // returns index 3 of tcrt_array_norm (index vary from 0 to 5)
+
+/*
+Darlington Class enables each TCRT sensor individually (or in bulk)
+*/
+Darlington switches(D0, D1, D2, D3, D4, D5);    // constructs by (PinName) digital output pins, 1 pin per sensor-
+                                                // excluding power pins (default disables all)
+
+switches.writeAll(0, 0, 1, 1, 0, 0);    // (bool) writes to all respective pins in the order inside the argument
+
+switches.writeSingle(0, 1);    // writes (int) pin index (0 <= left-most; 5 <= right-most, ranges from 0 to 5)-
+                              // to (bool) True -- Enable
+
+//---------------------------------
+/*
+Motor Class is designed for bipolar operation by default, but has some support for unipolar control.
+This class is made for the University of Manchester EEE project Motor Driver Board (MDB), which has an external enable pin,
+this enable function is excluded from the class and must be configured externally.
+
+Main contributors: Yang Cheng
+
+Last updated: 16/03/2026
+*/
+Motor m1(D15, PC_9, PC_5);    // constructs motor object: (PinName) D15 as pwm output for PWM connection in the MDB,
+                              // (PinName) PC_9 as pwm output for DIR connection in the MDB (not required if using bipolar)
+                              // (PinName) PC_5 as digital logic output for BIPOLAR connection in the MDB
+
+m1.get_duty    // returns (float) pwm variable for debugging
+
+m1.get_dir    // returns (float) dir variable for debugging
+
+m1.get_mode    // returns (bool) mode variable for debugging
+
+m1.bipolar_mode(1);    // set (bool) mode as 1 for bipolar mode (0 for unipolar, default bipolar)
+
+m1.pwm_period(20);    // set (float) pwm period to 20 us (default 50 us, us as microseconds)
+
+m1.is_forward(1);    // set (bool) dir to 1 for "forward" (0 for "backward"), not used in bipolar
+
+m1.speed(0);    // set (float) pwm to normalised 0 duty -- negative max speed in bipolar, stop in unipolar
+m1.speed(0.5);    // set (float) pwm to normalised 0.5 duty -- stop in bipolar, 50% max speed in unipolar
+m1.speed(1);    // set (float) pwm to normalised 1 duty -- max speed in bipolar, max speed in unipolar
+
+// END OF DOCUMENTATION
