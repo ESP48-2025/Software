@@ -1,0 +1,20 @@
+#include "mbed.h"
+
+Serial hm10(PA_11, PA_12);   
+DigitalOut led(LED2);
+
+int main() {
+    hm10.baud(9600);
+
+    while (1) {
+        if (hm10.readable()) {
+            char data = hm10.getc();
+
+            if (data != 0) {
+                led = 1;
+            } else {
+                led = 0;
+            }
+        }
+    }
+}
