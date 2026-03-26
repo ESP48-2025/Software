@@ -35,7 +35,7 @@ class Encoder {
         void setwheelsize(float size) { wheel_size = size;}
 
         int getCount() const { return count; }
-        float getCps() const {return cps;}
+        float returnCps() const {return cps;}
         float getRpm(int cpr) {return (cps/cpr*60);}
         float getVel(void) const {return cps/cpr*2*3.14159*wheel_size;}
 };
