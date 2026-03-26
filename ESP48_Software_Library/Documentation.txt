@@ -20,7 +20,7 @@ ble.sendWords("Hello World");  // sends argument as text (char) to connected blu
 
 ble.available();    // returns (bool) True if connected to a bluetooth device
 
-string = ble.readChar();    // stores a letter command received by bluetooth in (char) string variable
+string = ble.readChar();    // stores single character command received by bluetooth in (char) string variable
 
 //----------------------------------
 /*
