@@ -119,3 +119,4 @@ m1.speed(0.5);    // set (float) pwm to normalised 0.5 duty -- stop in bipolar, 
 m1.speed(1);    // set (float) pwm to normalised 1 duty -- max speed in bipolar, max speed in unipolar
 
 // END OF DOCUMENTATION
+// 1st iteration by Yang CHeng, 26/03/2026
