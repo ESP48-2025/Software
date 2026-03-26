@@ -3,6 +3,8 @@
 /*
 Bluetooth Class inherits the mbed Serial Class and provides simple functions
 to transmit to and receive from another bluetooth user.
+Pins are set up as PA_11 and PA_12 on the NucleoF401RE development board
+This class does not support other boards
 
 Main contributers: Yijun Hao
 
@@ -10,20 +12,29 @@ Last updated: 26/03/2026
 */
 #include "Bluetooth.h"
 
-Bluetooth ble()  // initialise bluetooth object named 'ble', pins are predefined for our buggy use
+Bluetooth ble;  // initialise bluetooth object named 'ble', pins are predefined for our buggy use
 
-ble.begin()  // initiates communication frequency. Make sure the connected device uses the same frequency (default 9600)
+ble.begin();  // initiates communication frequency. Make sure the connected device uses the same frequency (default 9600)
 
-ble.sendWords()
+ble.sendWords("Hello World");  // sends argument as text (char) to connected bluetooth device terminal
 
+ble.available();    // returns (bool) True if connected to a bluetooth device
 
-#include "EncoderClass.h"
+string = ble.readChar();    // stores a letter command received by bluetooth in (char) string variable
+
+//----------------------------------
 /*
-Encoder Class regularly samples counts per second to return directional rpm, velocity and cumulative count
+Encoder Class regularly samples counts per second to return directional rpm, velocity and cumulative count.
+Requires 2 pins per encoder, excluding power
 
 Main contributors: Yijun Hao, Yang Cheng, (Nelson Hamilton)
+
+Last updated: 26/03/2026
 */
-Encoder enc1(PC_10, PC_12, 20);     // initiates using (PinName) pinA as PC_10, (PinName) pinB as PC_12, (float) sampling frequency at 20 Hz
+#include "EncoderClass.h"
+
+Encoder enc1(PC_10, PC_12, 20);     // initiates using (PinName) pinA as PC_10, (PinName) pinB as PC_12,
+                                    // (float) sampling frequency at 20 Hz
 
 enc1.reset();       // resets count variable, used internally when sampling
 
@@ -35,6 +46,7 @@ enc1.getCount();    // returns (int) count variable: 'count' incriments and decr
 
 enc1.returnCps();   // returns (float) cps variable: 'cps' is internally sampled
 
-enc1.getRpm();      // returns (float) rotation per minute, use setCpr first if your encoder does not have 511 counts per wheel rotation
+enc1.getRpm();      // returns (float) rotation per minute, use setCpr first if your encoder-
+                    // does not have 511 counts per wheel rotation
 
 enc1.getVel();      // returns (float) velocity calculated from rpm and wheel radius
