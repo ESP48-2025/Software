@@ -1,2 +1,5 @@
-# Software
-System control of the buggy. Vibe-coding not recommended.
+# Firmware
+Available Content:
+Software API
+Buggy Pin Allocation
+Buggy Pin Stability Ranking
