@@ -38,6 +38,7 @@ class Encoder {
         int getCount() const { return count; }
         float returnCps() const {return cps;}
         float getRpm(void) {return (cps/cpr*60);}
+        float getRps(void) {return (cps/cpr);}
         float getVel(void) const {return cps/cpr*2*3.14159*wheel_size;}
 };
 
