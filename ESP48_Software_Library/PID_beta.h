@@ -1,5 +1,6 @@
 #include "mbed.h"
 // created 28/03/2026
+// Updated 14/04/2026
 // Author: Yang Cheng
 // Requires testing:
 /*
@@ -19,23 +20,24 @@ class PID{
         float Inter;
         float* errors;
         size_t Isample;
+        float inter_dt;
 
         void shift(){
-            Inter -= 0.5*(errors[Isample-1]+errors[Isample-2]-errors[0]);
-            for (int j = Isample-1; j > 0; j--){
-            errors[j] = errors[j-1];
-            }
-            errors[0] = error;
+            // Inter -= errors[Isample-1];
+            // for (int j = Isample-1; j > 0; j--){
+            // errors[j] = errors[j-1];
+            // }
+            // errors[0] = error;
+            Inter += error;
         }
 
         float integrator(void){
-            Inter += 0.5*errors[0];
-            return Inter;
+            return Inter*inter_dt;
         }
 
         float differentiator(void){
             if (Isample > 1){
-                return (errors[0]-errors[1]);
+                return (errors[0]-errors[1])/inter_dt;
             }
             else{
                 return 0;
@@ -43,7 +45,7 @@ class PID{
         }
 
     public:
-        PID(float r, size_t i):reference(r), Isample(i), Inter(0.0f),
+        PID(float r, size_t i):reference(r), Isample(i), Inter(0.0f), inter_dt(0.5f),
         error(0.0f), output(0.0f), KP(1.0f), KI(1.0f), KD(1.0f){
             errors = new float[i];
             for (size_t j = 0; j < Isample; j++){
@@ -52,7 +54,7 @@ class PID{
 
         }
         // a copy constructor to prevent pointer conflicts
-        PID(const PID& other):reference(other.reference), Isample(other.Isample), Inter(other.Inter),
+        PID(const PID& other):reference(other.reference), Isample(other.Isample), Inter(other.Inter), inter_dt(other.inter_dt),
         error(other.error), output(other.output), KP(other.KP), KI(other.KI), KD(other.KD){
             errors = new float[Isample];
             for (size_t j = 0; j < Isample; j++){
@@ -67,6 +69,7 @@ class PID{
                 Isample = other.Isample;
                 error = other.error;
                 Inter = other.Inter;
+                inter_dt = other.inter_dt;
                 output = other.output;
                 KP = other.KP;
                 KI = other.KI;
@@ -93,15 +96,17 @@ class PID{
             KI = ki;
             KD = kd;
         }
+
+        void setDT(float DT){
+            //default 0.5s
+            inter_dt = DT;
+        }
+
         float updatePID(float newOutput){
-            error = newOutput-reference;
+            error = reference-newOutput;
             shift();
             output = KP*error + KI*integrator() + KD*differentiator();
             return output;
         }
 
 };
-
-
-
-
