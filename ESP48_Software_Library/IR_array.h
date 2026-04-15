@@ -1,28 +1,35 @@
 #include "mbed.h"
 
-class TCRT                                                              //Begin updated potentiometer class definition
-{
-
-private:                                                                //Private data member declaration
-    AnalogIn a0, a1, a2, a3, a4, a5;                                    //Declaration of AnalogIn object
-    float VDD, sample_freq;                                             //Float variable to speficy the value of VDD (3.3 V for the Nucleo-64)
+class TCRT{
+/*
+To use, run update_sample in your main loop.
+Then collect values from getCurrentSampleNorm or getCurrentSampleVolts
+*/
+private:                                                                
+    AnalogIn a0, a1, a2, a3, a4, a5;                                    
+    float VDD, sample_freq;                                             
     // float currentSampleNorm, currentSampleVolts
     volatile float tcrt_array_norm[6], tcrt_array_volt[6];
     Ticker sampler;
+    volatile bool sample_flag;
 
-public:                                                                 // Public declarations
+    void trigger_sample(void){
+        sample_flag = 1;
+    }
+
+public:                                                                 
     TCRT(PinName pin0, PinName pin1, PinName pin2, PinName pin3, PinName pin4, PinName pin5, float f):
                 a0(pin0),       a1(pin1),     a2(pin2),     a3(pin3),       a4(pin4),   a5(pin5), sample_freq(f) {
-        sample_freq = 20000;
-        sampler.attach(callback(this, &TCRT::sample), 1/sample_freq);
+        sample_flag = 0;
+        sampler.attach(callback(this, &TCRT::trigger_sample), 1.0f/sample_freq);
         VDD = 3.3;
-    }   //Constructor - user provided pin name assigned to AnalogIn...
-                                                                        //VDD is also provided to determine maximum measurable voltage
+    }   
+                                                                        
     void set_vdd(float vdd){
         VDD = vdd;
     }
 
-    void sample(void){                                                  //Public member function to read a sample and store the value as data members
+    void sample(void){                                                  
         tcrt_array_norm[0] = a0.read();                                 //Read a sample from the ADC and store normalised representation [0..1]
         tcrt_array_norm[1] = a1.read();
         tcrt_array_norm[2] = a2.read();
@@ -43,6 +50,12 @@ public:                                                                 // Publi
         return tcrt_array_volt[tcrt_index];                             //Return the most recent sampled voltage
     }
 
+    void update_sample(void){
+        if (sample_flag == 1){
+            sample_flag = 0;
+            sample();
+        }
+    }
 };
 
 
