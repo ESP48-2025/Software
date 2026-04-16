@@ -1,6 +1,6 @@
 #include "mbed.h"
 // created 28/03/2026
-// Updated 14/04/2026
+// Updated 15/04/2026
 // Author: Yang Cheng
 // Requires testing:
 /*
@@ -45,7 +45,7 @@ class PID{
         }
 
     public:
-        PID(float r, size_t i):reference(r), Isample(i), Inter(0.0f), inter_dt(0.5f),
+        PID(size_t i):reference(0.0f), Isample(i), Inter(0.0f), inter_dt(0.5f),
         error(0.0f), output(0.0f), KP(1.0f), KI(1.0f), KD(1.0f){
             errors = new float[i];
             for (size_t j = 0; j < Isample; j++){
@@ -100,6 +100,10 @@ class PID{
         void setDT(float DT){
             //default 0.5s
             inter_dt = DT;
+        }
+
+        void setReference(float ref){
+            reference = ref;
         }
 
         float updatePID(float newOutput){
