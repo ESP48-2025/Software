@@ -1,0 +1,158 @@
+// Created: 14/04/2026
+// Last Updated: 19/04/2026
+// Main Author: Yang Cheng
+/*
+Added steering control on top of speed control.
+This file is created separately because LineFollowing.cpp is working code;
+whereas this one still requires testing
+*/
+
+#include "mbed.h"
+#include "Bluetooth.h"
+#include "EncoderClass.h"
+#include "MotorClass.h"
+#include "PID.h"
+#include "IR_array.h"
+
+DigitalOut motorEnable(PA_13, 0);
+Motor motorLeft(D15, PC_9, PC_5);
+Motor motorRight(D14, PC_8, PC_6);
+Bluetooth ble;   
+Encoder encR(PC_10, PC_12, 200);
+Encoder encL(PC_11, PD_2, 200);
+
+TCRT IRSensors(PC_2, PC_3, A2, A3, A4, A5, 200);
+Darlington EnTcrt(D2, D3, D8, D9, PA_15, PA_14);
+
+
+float clamp(float value, float range_high, float range_low){
+    if (value < range_low){
+        return range_low;
+    }
+    else{
+        if (value > range_high){
+        return range_high;
+        }
+        else {
+        return value;
+        }
+    }
+}
+
+float find_ref(float target_ref){
+    // fixes offset in reference
+    if (target_ref > 1.8){
+        return target_ref * 0.51 + 1.44;    // positive region
+    }
+    if (target_ref < -1.8){
+        return target_ref * 0.51 -0.79;     // negative region
+    }
+    return 0;   // else in pwm dead space
+}
+
+int main(){
+    const float loop_time_s = 0.02f;
+    // float RPS_Max = 7.0;
+    // speed control
+    PID LeftMotor(50);
+    LeftMotor.setDT(loop_time_s);
+    PID RightMotor(50);
+    RightMotor.setDT(loop_time_s);
+
+    float refRpsL, refRpsR;
+    float refRps_Max = 7.0f;
+    float rpsL, rpsR, pwmL, pwmR;
+    
+    // steering control
+    float IRdata[6];
+    float tcrt_weighted, tcrt_response;
+    float tcrt_total;
+    PID Steering(50);
+    Steering.setReference(3.5);
+    Steering.setDT(loop_time_s);
+    Steering.setGain(0.02, 0, 0);
+
+    // ble report cycle
+    ble.begin();
+    unsigned int ble_report_cycle = 0;
+    
+    wait(3);
+    //setup time
+    motorEnable.write(1);
+    while (1) {
+        // speed, straight line
+        LeftMotor.setReference(refRpsL);
+        LeftMotor.setGain(0.025, 0.01, 0);
+        rpsL = 0 - encL.getRps();
+        pwmL = LeftMotor.updatePID(refRpsR) + 0.5;     // offset at 0.5 duty
+        
+        RightMotor.setReference(-1.7);
+        RightMotor.setGain(0.01875, 0.0125, 0);
+        rpsR = encR.getRps();
+        pwmR = RightMotor.updatePID(rpsR) + 0.5;     // offset at 0.5 duty
+        
+        // measure wheel speed
+        if (ble.sendAvailable()){
+            ble.sendSpeed(rpsL, rpsR);
+        }
+
+        // safety clamp
+        pwmL = clamp(pwmL, 1, 0);
+        motorLeft.speed(pwmL);
+
+        pwmR = clamp(pwmR, 1, 0);
+        motorRight.speed(pwmR);
+
+        // sample tcrt readings
+        IRSensors.update_sample();
+        tcrt_weighted = 0;
+        tcrt_total = 0;
+        for (int i=0;i<6;i++){
+            IRdata[i] = IRSensors.getCurrentSampleNorm(i);
+            tcrt_weighted += (i+1)*IRdata[i];
+            tcrt_total +=IRdata[i];
+        }
+        tcrt_weighted = tcrt_weighted / tcrt_total;
+
+        // tcrt PID beta -- questionable
+        tcrt_response = Steering.updatePID(tcrt_weighted);
+        if (tcrt_response > 0){      // Left drift -> turn right -> reduce right speed
+            refRpsL = refRps_Max;
+            refRpsR = refRps_Max - tcrt_response;
+        }
+        else {      // Right drift -> turn left -> reduce left speed;
+                    // No drift -> response = 0 -> no effect
+            refRpsL = refRps_Max + tcrt_response;
+            refRpsR = refRps_Max;
+        }
+        // convert for rps PID
+        // refRpsL = find_ref(refRpsL);
+        // refRpsR = find_ref(refRpsR);
+
+        // bluetooth report
+        switch (ble_report_cycle){
+            case 0:
+                ble.sendWords("Measured RPS");
+                ble.sendSpeed(rpsL, rpsR);
+                break;
+            case 1:
+                ble.sendTCRT(IRdata[0], IRdata[1], IRdata[2], IRdata[3], IRdata[4], IRdata[5]);
+                break;
+            case 2:
+                ble.sendWords("Target RPS");
+                ble.sendSpeed(refRpsL, refRpsR);
+                break;
+            default:
+                ble.sendWords("nothing to report");
+                break;
+        }
+        ble_report_cycle += 1;
+        ble_report_cycle %= 2;
+
+        wait(loop_time_s);
+    }
+};
+
+
+
+
