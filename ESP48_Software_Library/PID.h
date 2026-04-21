@@ -22,11 +22,11 @@ class PID{
         float inter_dt;
 
         void shift(){
-            Inter -= errors[Isample-1];
-            for (int j = Isample-1; j > 0; j--){
-            errors[j] = errors[j-1];
-            }
-            errors[0] = error;
+            // Inter -= errors[Isample-1];
+            // for (int j = Isample-1; j > 0; j--){
+            // errors[j] = errors[j-1];
+            // }
+            // errors[0] = error;
             Inter += error;
         }
 
@@ -105,8 +105,11 @@ class PID{
             reference = ref;
         }
 
-        float updatePID(float newOutput){
-            error = reference-newOutput;
+        float updatePID(float newOutput, float pwm){
+            error = reference-newOutput;            
+            if ((pwm < 0.05 && error < 0) || (pwm > 0.95 && error > 0)){
+                return output;
+            }
             shift();
             output = KP*error + KI*integrator() + KD*differentiator();
             return output;
