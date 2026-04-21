@@ -1,5 +1,5 @@
 // Created: 14/04/2026
-// Last Updated: 19/04/2026
+// Last Updated: 21/04/2026
 // Main Author: Yang Cheng
 /*
 Added steering control on top of speed control.
@@ -39,17 +39,6 @@ float clamp(float value, float range_high, float range_low){
     }
 }
 
-float find_ref(float target_ref){
-    // fixes offset in reference
-    if (target_ref > 1.8){
-        return target_ref * 0.51 + 1.44;    // positive region
-    }
-    if (target_ref < -1.8){
-        return target_ref * 0.51 -0.79;     // negative region
-    }
-    return 0;   // else in pwm dead space
-}
-
 int main(){
     const float loop_time_s = 0.02f;
     // float RPS_Max = 7.0;
@@ -60,8 +49,10 @@ int main(){
     RightMotor.setDT(loop_time_s);
 
     float refRpsL, refRpsR;
-    float refRps_Max = 7.0f;
-    float rpsL, rpsR, pwmL, pwmR;
+    float refRps_Max = 5.5f;
+    float rpsL, rpsR;
+    float pwmL = 0.5;
+    float pwmR = 0.5;
     
     // steering control
     float IRdata[6];
@@ -82,14 +73,14 @@ int main(){
     while (1) {
         // speed, straight line
         LeftMotor.setReference(refRpsL);
-        LeftMotor.setGain(0.025, 0.01, 0);
+        LeftMotor.setGain(0.05, 0.3, 0);
         rpsL = 0 - encL.getRps();
-        pwmL = LeftMotor.updatePID(refRpsR) + 0.5;     // offset at 0.5 duty
+        pwmL = LeftMotor.updatePID(refRpsR, pwmL) + 0.5;     // offset at 0.5 duty
         
         RightMotor.setReference(-1.7);
-        RightMotor.setGain(0.01875, 0.0125, 0);
+        RightMotor.setGain(0.045, 0.4, 0);
         rpsR = encR.getRps();
-        pwmR = RightMotor.updatePID(rpsR) + 0.5;     // offset at 0.5 duty
+        pwmR = RightMotor.updatePID(rpsR, pwmR) + 0.5;     // offset at 0.5 duty
         
         // measure wheel speed
         if (ble.sendAvailable()){
@@ -115,7 +106,7 @@ int main(){
         tcrt_weighted = tcrt_weighted / tcrt_total;
 
         // tcrt PID beta -- questionable
-        tcrt_response = Steering.updatePID(tcrt_weighted);
+        tcrt_response = Steering.updatePID(tcrt_weighted, 0.5);
         if (tcrt_response > 0){      // Left drift -> turn right -> reduce right speed
             refRpsL = refRps_Max;
             refRpsR = refRps_Max - tcrt_response;
@@ -125,9 +116,6 @@ int main(){
             refRpsL = refRps_Max + tcrt_response;
             refRpsR = refRps_Max;
         }
-        // convert for rps PID
-        // refRpsL = find_ref(refRpsL);
-        // refRpsR = find_ref(refRpsR);
 
         // bluetooth report
         switch (ble_report_cycle){
@@ -152,7 +140,3 @@ int main(){
         wait(loop_time_s);
     }
 };
-
-
-
-
