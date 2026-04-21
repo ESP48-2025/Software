@@ -75,7 +75,7 @@ int main(){
         LeftMotor.setReference(refRpsL);
         LeftMotor.setGain(0.05, 0.3, 0);
         rpsL = 0 - encL.getRps();
-        pwmL = LeftMotor.updatePID(refRpsR, pwmL) + 0.5;     // offset at 0.5 duty
+        pwmL = LeftMotor.updatePID(refRpsR, pwmL) + 0.513;     // offset at 0.513 duty
         
         RightMotor.setReference(-1.7);
         RightMotor.setGain(0.045, 0.4, 0);
