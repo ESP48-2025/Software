@@ -7,7 +7,7 @@
 DigitalOut motorEnable(PA_13, 0);
 Motor motorLeft(D15, PC_9, PC_5);
 Motor motorRight(D14, PC_8, PC_6);
-Bluetooth ble;   
+Bluetooth ble;
 Encoder encR(PC_10, PC_12, 200);
 Encoder encL(PC_11, PD_2, 200);
 
@@ -32,27 +32,29 @@ int main(){
     PID RightMotor(50);
     ble.begin();
 
-    float rpsL, rpsR, pwmL, pwmR;
+    float rpsL, rpsR;
+    float pwmL = 0.5;
+    float pwmR = 0.5;
     
     wait(3);
     //setup time
     motorEnable.write(1);
     const float loop_time_s = 0.02f;
     while (1) {
-        LeftMotor.setReference(4);
+        LeftMotor.setReference(5.5);
         LeftMotor.setDT(loop_time_s);
-        LeftMotor.setGain(0.025, 0.01, 0);
-        rpsL = 0 - encL.getRps();
-        pwmL = LeftMotor.updatePID(rpsL) + 0.5;     // offset at 0.5 duty
+        LeftMotor.setGain(0.05, 0.3, 0);
+        rpsL = encL.getRps();
+        pwmL = LeftMotor.updatePID(rpsL, pwmL) + 0.513;     // offset at 0.5 duty
         
-        RightMotor.setReference(4);
+        RightMotor.setReference(5.5);
         RightMotor.setDT(loop_time_s);
-        RightMotor.setGain(0.01875, 0.0125, 0);
-        rpsR = encR.getRps();
-        pwmR = RightMotor.updatePID(rpsR) + 0.5;     // offset at 0.5 duty
+        RightMotor.setGain(0.045, 0.4, 0);
+        rpsR = 0 - encR.getRps();
+        pwmR = RightMotor.updatePID(rpsR, pwmR) + 0.5;     // offset at 0.5 duty
         
         if (ble.sendAvailable()){
-            ble.sendSpeed(rpsL, rpsR);
+            ble.sendSpeed(pwmL, pwmR);
         }
 
         pwmL = clamp(pwmL, 1, 0);
@@ -65,7 +67,3 @@ int main(){
         wait(loop_time_s);
     }
 };
-
-
-
-
