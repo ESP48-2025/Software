@@ -1,6 +1,6 @@
 #include "mbed.h"
 // created 28/03/2026
-// Updated 15/04/2026
+// Updated 22/04/2026
 // Author: Yang Cheng
 /*
 Initiate object with reference "reference" and intergration sample size "Isample"
@@ -22,11 +22,10 @@ class PID{
         float inter_dt;
 
         void shift(){
-            // Inter -= errors[Isample-1];
-            // for (int j = Isample-1; j > 0; j--){
-            // errors[j] = errors[j-1];
-            // }
-            // errors[0] = error;
+            for (int j = Isample-1; j > 0; j--){
+            errors[j] = errors[j-1];
+            }
+            errors[0] = error;
             Inter += error;
         }
 
