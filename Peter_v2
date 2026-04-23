@@ -1,0 +1,497 @@
+#include "mbed.h"
+#include "QEI.h"
+#include <algorithm>
+#include <math.h>
+
+// -------------------- LED --------------------
+DigitalOut led1(PA_14);
+DigitalOut led2(PA_15);
+DigitalOut led3(PC_7);
+DigitalOut led4(PA_9);
+DigitalOut led5(PB_3);
+DigitalOut led6(PA_10);
+
+// -------------------- BLE --------------------
+Serial hm10(PA_11, PA_12);   // HM-10 UART
+
+// -------------------- Line sensors --------------------
+AnalogIn s1(PC_2);
+AnalogIn s2(PC_3);
+AnalogIn s3(A2);
+AnalogIn s4(A3);
+AnalogIn s5(A4);
+AnalogIn s6(A5);
+
+// -------------------- Encoders --------------------
+QEI leftEnc(PC_11, PD_2, NC, 256, QEI::X4_ENCODING);
+QEI rightEnc(PC_10, PC_12, NC, 256, QEI::X4_ENCODING);
+
+// -------------------- Motor pins --------------------
+PwmOut left_motor(PB_8);
+PwmOut right_motor(PB_9);
+DigitalOut enable(PA_13);
+DigitalOut left_IN1(PC_5);
+DigitalOut left_dir(PC_9);
+DigitalOut right_IN1(PC_6);
+DigitalOut right_dir(PC_8);
+
+// -------------------- Parameters --------------------
+const float STOP_PWM = 1.0f;
+
+// -------------------- Line-follow parameters --------------------
+const float BASE_PWM = 0.45f;
+const float KP = 0.065f;
+const float MAX_TURN = 0.09f;
+
+// -------------------- Sensor positions --------------------
+const float pos[6] = {-3.7f, -2.2f, -0.7f, 0.7f, 2.2f, 3.7f};
+
+// -------------------- Black / White calibration --------------------
+const float black[6] = {0.50f, 0.55f, 0.55f, 0.55f, 0.50f, 0.50f};
+const float white[6] = {2.30f, 2.73f, 2.70f, 2.35f, 2.48f, 2.66f};
+
+// -------------------- Last seen line position --------------------
+float last_position = 0.0f;
+
+// -------------------- Speed compensation --------------------
+const float DT = 0.01f; // 10 ms
+const float TARGET_TICKS_PER_S = 16000.0f;
+const float KP_SPEED = 0.00010f;
+const float MAX_SPEED_COMP = 0.30f;
+const float MIN_BASE_PWM = 0.35f;
+const float MAX_BASE_PWM = 0.80f;
+
+// -------------------- Turnaround parameters --------------------
+// 这里后面你要现场微调
+const int TURN_180_TICKS = 1500;
+const float TURN_PWM_FAST = 0.58f;
+const float TURN_PWM_SLOW = 0.70f;
+const int TURN_SLOWDOWN_MARGIN = 250;
+
+// -------------------- Stop parameters --------------------
+const float STOP_SPEED_THRESHOLD = 300.0f;
+// 如果连续一段时间几乎看不到线，就停车
+const float LOST_LINE_STOP_THRESHOLD = 0.08f;
+const int LOST_LINE_CONFIRM_COUNT = 2; // about 120 ms
+
+// -------------------- State machine --------------------
+enum RobotState {
+    STATE_LINE_FOLLOW = 0,
+    STATE_TURNAROUND,
+    STATE_CONTROLLED_STOP,
+    STATE_STOPPED
+};
+
+RobotState state = STATE_LINE_FOLLOW;
+
+// -------------------- BLE requests --------------------
+volatile bool turnaround_request = false;
+volatile bool resume_request = false;
+volatile bool stop_request = false;
+
+// -------------------- Lost line counter --------------------
+int lost_line_counter = 0;
+
+// -------------------- Helpers --------------------
+template <typename T>
+T clamp_val(T x, T lo, T hi) {
+    if (x < lo) return lo;
+    if (x > hi) return hi;
+    return x;
+}
+
+float readVoltage(AnalogIn &pin) {
+    return pin.read() * 3.3f;
+}
+
+float normalizeSensor(float v, float b, float w) {
+    float x = (v - b) / (w - b);
+    return clamp_val(x, 0.0f, 1.0f);
+}
+
+// -------------------- Motor control: forward --------------------
+void setMotorPWM(float left_pwm, float right_pwm) {
+    left_pwm = clamp_val(left_pwm, 0.35f, 1.00f);
+    right_pwm = clamp_val(right_pwm, 0.35f, 1.00f);
+
+    left_dir = 1;
+    right_dir = 1;
+    left_motor = left_pwm;
+    right_motor = right_pwm;
+}
+
+// -------------------- Stop motors --------------------
+void stopMotors() {
+    left_motor = STOP_PWM;
+    right_motor = STOP_PWM;
+}
+
+// -------------------- In-place left turn --------------------
+void setTurnLeftInPlace(float left_pwm, float right_pwm) {
+    left_pwm = clamp_val(left_pwm, 0.35f, 1.00f);
+    right_pwm = clamp_val(right_pwm, 0.35f, 1.00f);
+
+    left_dir = 0;   // left backward
+    right_dir = 1;  // right forward
+    left_motor = left_pwm;
+    right_motor = right_pwm;
+}
+
+// -------------------- BLE check (polling) --------------------
+void checkBLE() {
+    while (hm10.readable()) {
+        char c = hm10.getc();
+
+        if (c == 'T') {
+            turnaround_request = true;
+            printf("BLE: T turnaround request\r\n");
+        } else if (c == 'G') {
+            resume_request = true;
+            printf("BLE: G resume request\r\n");
+        } else if (c == 'S') {
+            stop_request = true;
+            printf("BLE: S stop request\r\n");
+        }
+    }
+}
+
+// -------------------- Clear one-shot commands --------------------
+void clearCommandFlagsExceptTurn() {
+    resume_request = false;
+    stop_request = false;
+}
+
+void clearAllCommandFlags() {
+    turnaround_request = false;
+    resume_request = false;
+    stop_request = false;
+}
+
+// -------------------- Resume line follow --------------------
+void resumeLineFollow() {
+    resume_request = false;
+    stop_request = false;
+    turnaround_request = false;
+    lost_line_counter = 0;
+    last_position = 0.0f;
+
+    leftEnc.reset();
+    rightEnc.reset();
+
+    left_dir = 1;
+    right_dir = 1;
+    left_motor = 0.70f;
+    right_motor = 0.70f;
+    wait_ms(150);
+
+    state = STATE_LINE_FOLLOW;
+    printf("Resume line follow\r\n");
+}
+
+// -------------------- 180-degree turnaround --------------------
+void doTurnaround180() {
+    stopMotors();
+    wait_ms(80);
+
+    leftEnc.reset();
+    rightEnc.reset();
+
+    while (true) {
+        checkBLE();
+
+        // T 已经在执行 turn 里了，这里不用重复处理
+
+        // 如果想在 turn 过程中按 S 直接停下：
+        if (stop_request) {
+            stop_request = false;
+            stopMotors();
+            state = STATE_STOPPED;
+            printf("Turn interrupted -> STOPPED\r\n");
+            return;
+        }
+
+        // 如果想在 turn 过程中按 G 忽略掉，就不处理
+        // 也可以处理成直接循迹，但一般没必要
+
+        int l = abs(leftEnc.getPulses());
+        int r = abs(rightEnc.getPulses());
+        int avg = (l + r) / 2;
+        int remaining = TURN_180_TICKS - avg;
+
+        if (remaining <= 0) {
+            break;
+        }
+
+        if (remaining > TURN_SLOWDOWN_MARGIN) {
+            setTurnLeftInPlace(TURN_PWM_FAST, TURN_PWM_FAST);
+        } else {
+            setTurnLeftInPlace(TURN_PWM_SLOW, TURN_PWM_SLOW);
+        }
+
+        printf("TURN avg=%d remain=%d\r\n", avg, remaining);
+        wait_ms(10);
+    }
+
+    stopMotors();
+    wait_ms(150);
+
+    leftEnc.reset();
+    rightEnc.reset();
+    last_position = 0.0f;
+    lost_line_counter = 0;
+
+    turnaround_request = false;
+    resume_request = false;
+    stop_request = false;
+
+    state = STATE_LINE_FOLLOW;
+    printf("TURN DONE -> LINE_FOLLOW\r\n");
+}
+
+// -------------------- Controlled stop --------------------
+void doControlledStop() {
+    float brake_pwm = 0.55f;
+
+    int prevLeft = leftEnc.getPulses();
+    int prevRight = rightEnc.getPulses();
+
+    while (true) {
+        checkBLE();
+
+        // 任何时候 T 都最高优先级
+        if (turnaround_request) {
+            stopMotors();
+            wait_ms(80);
+            state = STATE_TURNAROUND;
+            printf("Stopping interrupted -> TURNAROUND\r\n");
+            return;
+        }
+
+        // G：恢复循迹
+        if (resume_request) {
+            resumeLineFollow();
+            return;
+        }
+
+        int currLeft = leftEnc.getPulses();
+        int currRight = rightEnc.getPulses();
+        int dLeft = currLeft - prevLeft;
+        int dRight = currRight - prevRight;
+
+        prevLeft = currLeft;
+        prevRight = currRight;
+
+        float left_ticks_per_s = fabs((float)dLeft) / DT;
+        float right_ticks_per_s = fabs((float)dRight) / DT;
+        float avg_ticks_per_s = 0.5f * (left_ticks_per_s + right_ticks_per_s);
+
+        brake_pwm += 0.015f;
+        brake_pwm = clamp_val(brake_pwm, 0.55f, 1.00f);
+
+        left_dir = 1;
+        right_dir = 1;
+        left_motor = brake_pwm;
+        right_motor = brake_pwm;
+
+        printf("STOPPING speed=%.0f pwm=%.2f\r\n", avg_ticks_per_s, brake_pwm);
+
+        if (avg_ticks_per_s < STOP_SPEED_THRESHOLD || brake_pwm >= 0.98f) {
+            break;
+        }
+
+        wait_ms(10);
+    }
+
+    stopMotors();
+    state = STATE_STOPPED;
+    stop_request = false;
+    printf("STOP DONE -> STOPPED\r\n");
+}
+
+int main() {
+    // -------------------- LEDs on --------------------
+    led1 = 1;
+    led2 = 1;
+    led3 = 1;
+    led4 = 1;
+    led5 = 1;
+    led6 = 1;
+
+    // -------------------- BLE baud --------------------
+    hm10.baud(9600);
+
+    // -------------------- Motor mode --------------------
+    left_IN1 = 0;
+    right_IN1 = 0;
+
+    // -------------------- PWM frequency --------------------
+    left_motor.period_us(100);
+    right_motor.period_us(100);
+
+    // -------------------- Initial stop --------------------
+    left_motor = STOP_PWM;
+    right_motor = STOP_PWM;
+    wait(2.0);
+
+    // -------------------- Enable driver --------------------
+    enable = 1;
+
+    // -------------------- Gentle startup --------------------
+    left_dir = 1;
+    right_dir = 1;
+    left_motor = 0.65f;
+    right_motor = 0.65f;
+    wait_ms(200);
+
+    int prevLeft = leftEnc.getPulses();
+    int prevRight = rightEnc.getPulses();
+
+    while (true) {
+        checkBLE();
+
+        // -------------------- Highest priority: T --------------------
+        if (turnaround_request) {
+            state = STATE_TURNAROUND;
+        } else if (stop_request && state != STATE_STOPPED) {
+            state = STATE_CONTROLLED_STOP;
+        }
+
+        // -------------------- Turnaround --------------------
+        if (state == STATE_TURNAROUND) {
+            doTurnaround180();
+            prevLeft = leftEnc.getPulses();
+            prevRight = rightEnc.getPulses();
+            continue;
+        }
+
+        // -------------------- Controlled stop --------------------
+        if (state == STATE_CONTROLLED_STOP) {
+            doControlledStop();
+            prevLeft = leftEnc.getPulses();
+            prevRight = rightEnc.getPulses();
+            continue;
+        }
+
+        // -------------------- Stopped --------------------
+        if (state == STATE_STOPPED) {
+            stopMotors();
+            checkBLE();
+
+            // 任何时候按 T 都掉头
+            if (turnaround_request) {
+                state = STATE_TURNAROUND;
+                wait_ms(20);
+                continue;
+            }
+
+            // 按 G 恢复循迹
+            if (resume_request) {
+                resumeLineFollow();
+                prevLeft = leftEnc.getPulses();
+                prevRight = rightEnc.getPulses();
+            }
+
+            wait_ms(20);
+            continue;
+        }
+
+        // ==================== Normal line following ====================
+        float U[6];
+        U[0] = readVoltage(s1);
+        U[1] = readVoltage(s2);
+        U[2] = readVoltage(s3);
+        U[3] = readVoltage(s4);
+        U[4] = readVoltage(s5);
+        U[5] = readVoltage(s6);
+
+        float w[6];
+        float sum_w = 0.0f;
+        float weighted_sum = 0.0f;
+
+        for (int i = 0; i < 6; i++) {
+            w[i] = normalizeSensor(U[i], black[i], white[i]);
+            sum_w += w[i];
+            weighted_sum += w[i] * pos[i];
+        }
+
+        float line_position = last_position;
+        if (sum_w > 0.15f) {
+            line_position = weighted_sum / sum_w;
+            last_position = line_position;
+        }
+
+        int currLeft = leftEnc.getPulses();
+        int currRight = rightEnc.getPulses();
+        int dLeft = currLeft - prevLeft;
+        int dRight = currRight - prevRight;
+
+        prevLeft = currLeft;
+        prevRight = currRight;
+
+        float left_ticks_per_s = fabs((float)dLeft) / DT;
+        float right_ticks_per_s = fabs((float)dRight) / DT;
+        float avg_ticks_per_s = 0.5f * (left_ticks_per_s + right_ticks_per_s);
+
+        // speed compensation
+        float speed_error = TARGET_TICKS_PER_S - avg_ticks_per_s;
+        float speed_comp = KP_SPEED * speed_error;
+        speed_comp = clamp_val(speed_comp, -MAX_SPEED_COMP, MAX_SPEED_COMP);
+
+        float base_pwm_now = BASE_PWM - speed_comp;
+        base_pwm_now = clamp_val(base_pwm_now, MIN_BASE_PWM, MAX_BASE_PWM);
+
+        // steering
+        float turn = -KP * line_position;
+        turn = clamp_val(turn, -MAX_TURN, MAX_TURN);
+
+        float left_pwm = base_pwm_now - turn;
+        float right_pwm = base_pwm_now + turn;
+
+        // lost-line recovery
+        if (sum_w <= 0.15f) {
+            if (last_position < 0.0f) {
+                left_pwm = 0.90f;
+                right_pwm = 0.72f;
+            } else {
+                left_pwm = 0.72f;
+                right_pwm = 0.90f;
+            }
+        }
+
+        setMotorPWM(left_pwm, right_pwm);
+
+        // 如果在正常循迹时收到 G，其实没必要做事，直接清掉
+        if (resume_request) {
+            resume_request = false;
+        }
+
+        // -------------------- Lost-line stop detection --------------------
+        if (sum_w < LOST_LINE_STOP_THRESHOLD) {
+            lost_line_counter++;
+        } else {
+            lost_line_counter = 0;
+        }
+
+        if (lost_line_counter >= LOST_LINE_CONFIRM_COUNT) {
+            printf("Lost line -> CONTROLLED_STOP\r\n");
+            state = STATE_CONTROLLED_STOP;
+            lost_line_counter = 0;
+        }
+        
+        printf(
+            "state=%d pos=%.2f sum=%.2f vL=%.0f vR=%.0f vAvg=%.0f base=%.2f L=%.2f R=%.2f\r\n",
+            state,
+            line_position,
+            sum_w,
+            left_ticks_per_s,
+            right_ticks_per_s,
+            avg_ticks_per_s,
+            base_pwm_now,
+            left_pwm,
+            right_pwm
+        );
+        
+
+        wait_ms(10);
+    }
+}
