@@ -50,7 +50,7 @@ int main(){
 
     volatile float refRpsL = 0;
     volatile float refRpsR = 0;
-    float refRps_Max = 5.5f;
+    float refRps_Max = 3.0f;
     float rpsL, rpsR;
     volatile float pwmL = 0.5;
     volatile float pwmR = 0.5;
