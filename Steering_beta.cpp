@@ -40,7 +40,7 @@ float clamp(float value, float range_high, float range_low){
 }
 
 int main(){
-    const float loop_time_s = 0.1f;
+    const float loop_time_s = 0.2f;
     // float RPS_Max = 7.0;
     // speed control
     PID LeftMotor(50);
@@ -61,6 +61,7 @@ int main(){
     float tcrt_weighted;
     volatile float tcrt_response = 0.0f;
     float tcrt_total;
+    float normalised_response;
     PID Steering(50);
     Steering.setReference(3.5);
     Steering.setDT(loop_time_s);
@@ -118,7 +119,8 @@ int main(){
         }
 
         // tcrt PID beta -- questionable
-        tcrt_response = Steering.updatePID(tcrt_weighted, tcrt_response/(2*refRps_Max)+0.5);    // second argument scaled to max at 0 and 1; min at 0.5
+        normalised_response = tcrt_response/(2*refRps_Max)+0.5;
+        tcrt_response = Steering.updatePID(tcrt_weighted, normalised_response);    // second argument scaled to max at 0 and 1; min at 0.5
         tcrt_response = clamp(tcrt_response, refRps_Max, -refRps_Max);
         if (tcrt_response > 0){      // Left drift -> turn right -> reduce right speed
             refRpsL = refRps_Max;
@@ -141,14 +143,18 @@ int main(){
                 ble.sendTCRT(IRdata[0], IRdata[1], IRdata[2], IRdata[3], IRdata[4], IRdata[5]);
                 break;
             case 2:
-                ble.sendWords("\"tcrt_response\"");
-                ble.sendSpeed(tcrt_response, 0);
+                ble.sendWords("tcrt_weighted");
+                ble.sendSpeed(tcrt_weighted, 2.7);
                 break;
             case 3:
+                ble.sendWords("\"tcrt_response\"");
+                ble.sendSpeed(tcrt_response, normalised_response);
+                break;
+            case 4:
                 ble.sendWords("Target RPS");
                 ble.sendSpeed(refRpsL, refRpsR);
                 break;
-            case 4:
+            case 5:
                 ble.sendWords("pwm clamped");
                 ble.sendSpeed(pwmL, pwmR);
                 break;
@@ -160,7 +166,7 @@ int main(){
                 break;
         }
         ble_report_cycle += 1;
-        ble_report_cycle %= 5;  // skips error messages on loops
+        ble_report_cycle %= 6;  // skips error messages on loops
 
         wait(loop_time_s);
     }
