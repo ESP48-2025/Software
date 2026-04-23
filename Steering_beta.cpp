@@ -1,5 +1,5 @@
 // Created: 14/04/2026
-// Last Updated: 23/04/2026
+// Last Updated: 19/04/2026
 // Main Author: Yang Cheng
 /*
 Added steering control on top of speed control.
@@ -141,8 +141,16 @@ int main(){
                 ble.sendTCRT(IRdata[0], IRdata[1], IRdata[2], IRdata[3], IRdata[4], IRdata[5]);
                 break;
             case 2:
+                ble.sendWords("\"tcrt_response\"");
+                ble.sendSpeed(tcrt_response, 0);
+                break;
+            case 3:
                 ble.sendWords("Target RPS");
                 ble.sendSpeed(refRpsL, refRpsR);
+                break;
+            case 4:
+                ble.sendWords("pwm clamped");
+                ble.sendSpeed(pwmL, pwmR);
                 break;
             case 16:    // error message, do not loop
                 ble.sendWords("Steering: tcrt 0 div");
@@ -152,7 +160,7 @@ int main(){
                 break;
         }
         ble_report_cycle += 1;
-        ble_report_cycle %= 3;  // skips error messages on loops
+        ble_report_cycle %= 5;  // skips error messages on loops
 
         wait(loop_time_s);
     }
