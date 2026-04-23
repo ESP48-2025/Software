@@ -65,7 +65,7 @@ int main(){
     PID Steering(50);
     Steering.setReference(3.5);
     Steering.setDT(loop_time_s);
-    Steering.setGain(0.02, 0, 0);
+    Steering.setGain(0.2, 0, 0);
 
     // ble report cycle
     ble.begin();
@@ -81,18 +81,13 @@ int main(){
         // speed, straight line
         LeftMotor.setReference(refRpsL);
         LeftMotor.setGain(0.05, 0.3, 0);
-        rpsL = 0 - encL.getRps();
-        pwmL = LeftMotor.updatePID(refRpsL, pwmL) + 0.513;     // offset at 0.5 duty
+        rpsL = encL.getRps();
+        pwmL = LeftMotor.updatePID(rpsL, pwmL) + 0.513;     // offset at 0.5 duty
         
         RightMotor.setReference(refRpsR);
         RightMotor.setGain(0.045, 0.4, 0);
-        rpsR = encR.getRps();
-        pwmR = RightMotor.updatePID(refRpsR, pwmR) + 0.5;     // offset at 0.5 duty
-        
-        // measure wheel speed
-        if (ble.sendAvailable()){
-            ble.sendSpeed(rpsL, rpsR);
-        }
+        rpsR = 0 - encR.getRps();
+        pwmR = RightMotor.updatePID(rpsR, pwmR) + 0.5;     // offset at 0.5 duty
 
         // safety clamp
         pwmL = clamp(pwmL, 1, 0);
