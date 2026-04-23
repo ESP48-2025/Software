@@ -1,5 +1,5 @@
 // Created: 14/04/2026
-// Last Updated: 19/04/2026
+// Last Updated: 23/04/2026
 // Main Author: Yang Cheng
 /*
 Added steering control on top of speed control.
@@ -40,7 +40,7 @@ float clamp(float value, float range_high, float range_low){
 }
 
 int main(){
-    const float loop_time_s = 0.02f;
+    const float loop_time_s = 0.1f;
     // float RPS_Max = 7.0;
     // speed control
     PID LeftMotor(50);
@@ -48,16 +48,18 @@ int main(){
     PID RightMotor(50);
     RightMotor.setDT(loop_time_s);
 
-    float refRpsL, refRpsR;
+    volatile float refRpsL = 0;
+    volatile float refRpsR = 0;
     float refRps_Max = 5.5f;
     float rpsL, rpsR;
-    float pwmL = 0.5;
-    float pwmR = 0.5;
+    volatile float pwmL = 0.5;
+    volatile float pwmR = 0.5;
     
     // steering control
     float IRdata[6];
+    IRSensors.sample();     // initiate array?
     float tcrt_weighted;
-    float tcrt_response = 0.0f;
+    volatile float tcrt_response = 0.0f;
     float tcrt_total;
     PID Steering(50);
     Steering.setReference(3.5);
@@ -71,6 +73,9 @@ int main(){
     wait(3);
     //setup time
     motorEnable.write(1);
+    EnTcrt.writeAll(1, 1, 1, 1, 1, 1);
+    wait_us(200);
+
     while (1) {
         // speed, straight line
         LeftMotor.setReference(refRpsL);
@@ -147,7 +152,7 @@ int main(){
                 break;
         }
         ble_report_cycle += 1;
-        ble_report_cycle %= 2;  // skips error messages on loops
+        ble_report_cycle %= 3;  // skips error messages on loops
 
         wait(loop_time_s);
     }
