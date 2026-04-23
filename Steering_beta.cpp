@@ -41,7 +41,7 @@ float clamp(float value, float range_high, float range_low){
 
 int main(){
     const float loop_time_s = 0.2f;
-    // float RPS_Max = 7.0;
+    // RPS_Max = 7.0 because left pwm approaches 1.
     // speed control
     PID LeftMotor(50);
     LeftMotor.setDT(loop_time_s);
@@ -50,7 +50,7 @@ int main(){
 
     volatile float refRpsL = 0;
     volatile float refRpsR = 0;
-    float refRps_Max = 3.0f;
+    float refRps_Max = 2.0f;
     float rpsL, rpsR;
     volatile float pwmL = 0.5;
     volatile float pwmR = 0.5;
@@ -73,6 +73,13 @@ int main(){
     
     wait(3);
     //setup time
+    bool start = false;     // send anything to start
+    while(!start){
+        if (ble.available()){
+            ble.readChar();
+            start = true;
+        }
+    }
     motorEnable.write(1);
     EnTcrt.writeAll(1, 1, 1, 1, 1, 1);
     wait_us(200);
