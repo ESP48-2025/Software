@@ -1,9 +1,10 @@
 // Created: 14/04/2026
-// Last Updated: 22/04/2026
+// Last Updated: 19/04/2026
 // Main Author: Yang Cheng
 /*
-patch notes:
-debugged speed control and steering, uses the 22/04/2026 PID class
+Added steering control on top of speed control.
+This file is created separately because LineFollowing.cpp is working code;
+whereas this one still requires testing
 */
 
 #include "mbed.h"
@@ -131,6 +132,7 @@ int main(){
                 ble.sendSpeed(rpsL, rpsR);
                 break;
             case 1:
+                ble.sendWords("TCRT data");
                 ble.sendTCRT(IRdata[0], IRdata[1], IRdata[2], IRdata[3], IRdata[4], IRdata[5]);
                 break;
             case 2:
