@@ -40,7 +40,7 @@ public:
         R = clamp(R, 0.99, 0)*100;
         RR = clamp(RR, 0.99, 0)*100;
         RRR = clamp(RRR, 0.99, 0)*100;
-        hm10.printf(".%d.%d.%d.%d.%d.%d\r\n", LLL, LL, L, R, RR, RRR);
+        hm10.printf(".%d.%d.%d.%d.%d.%d\r\n", int(LLL), int(LL), int(L), int(R), int(RR), int(RRR));
     }
 
     bool sendAvailable(void){
