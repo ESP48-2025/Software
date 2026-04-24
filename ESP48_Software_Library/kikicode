@@ -1,0 +1,109 @@
+#include "mbed.h"
+#include "Motor.h"
+#include "PID.h"
+#include "LineSensor.h"
+#include "Buggy.h"
+
+// ===== BLUETOOTH =====
+Serial hm10(PA_11, PA_12);
+
+// ===== DEBUG =====
+Serial pc(USBTX, USBRX);
+
+// ===== ENABLE =====
+DigitalOut enable(PA_13);
+
+// ===== MOTORS =====
+Motor motL(PB_8, PC_11, PD_2, NC, 512, PC_5, PC_9);
+Motor motR(PB_9, PC_10, PC_12, NC, 512, PC_6, PC_8);
+
+// ===== SENSOR =====
+LineSensor sensors(PC_2, PC_3, A2, A3, A4, A5);
+
+// ===== PID =====
+//        kp    ki     kd      t     Ts   out_min out_max kaw
+PID pidL(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
+PID pidR(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
+PID steerPID(0.42f, 0.0f, 0.06f, 0.05f, 0.02f, -0.35f, 0.35f, 0.15f);
+
+DigitalOut C1(D2);
+DigitalOut C2(D3);
+DigitalOut C3(D8);
+DigitalOut C4(D9);
+DigitalOut C5(PA_15);
+DigitalOut C6(PA_14);
+
+// ===== BUGGY =====
+Buggy buggy(motL, motR, pidL, pidR, steerPID, sensors, 0.1f);
+
+// ===== BT COMMAND =====
+volatile char bt_cmd = 0;
+bool canTurn = true;
+Timer turnTimer;
+
+// ===== INTERRUPT =====
+void rXIRQ() {
+    char c = hm10.getc();
+    bt_cmd = c;   // store latest command only
+}
+
+// ===== MAIN =====
+int main() {
+
+    C1 = 1; 
+    C2 = 1; 
+    C3 = 1; 
+    C4 = 1; 
+    C5 = 1; 
+    C6 = 1; 
+
+    hm10.baud(9600);
+    hm10.attach(&rXIRQ, Serial::RxIrq);
+
+    enable = 0;
+
+    printf("Starting buggy...\r\n");
+
+    motL.setSpeed(0.0f);
+    motR.setSpeed(0.0f);
+
+    sensors.calibrate();
+
+    enable = 1;
+    buggy.start();
+
+    turnTimer.start();
+
+    while (1) {
+
+        // ===== NORMAL CONTROL UPDATE =====
+        buggy.update();
+
+        // ===== LINE LOST AUTO STOP =====
+        if (buggy.shouldStop()) {
+            buggy.stop();
+        }
+
+        // ===== DEBOUNCE TURN COMMAND =====
+        if (bt_cmd == 't' && canTurn) {
+
+            bt_cmd = 0;          // clear immediately
+            canTurn = false;     // lock
+
+            printf("Turning...\r\n");
+
+            buggy.stop();
+            wait_ms(150);
+
+            buggy.turnaround();
+
+            // cooldown so it cannot retrigger instantly
+            turnTimer.reset();
+        }
+
+        // ===== RE-ENABLE TURN AFTER COOLDOWN =====
+        if (!canTurn && turnTimer.read_ms() > 800) {
+            canTurn = true;
+        }
+    }
+}
