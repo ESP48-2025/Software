@@ -1,0 +1,3 @@
+add this library for QEI
+
+http://os.mbed.com/users/aberk/code/QEI/
