@@ -2,7 +2,10 @@
 #include "Motor.h"
 #include "PID.h"
 #include "LineSensor.h"
-#include "Buggy.h"
+#include "kikibuggy.h"
+
+float maxPWML = 0;
+float maxPWMR = 0;
 
 // ===== BLUETOOTH =====
 Serial hm10(PA_11, PA_12);
@@ -24,7 +27,7 @@ LineSensor sensors(PC_2, PC_3, A2, A3, A4, A5);
 //        kp    ki     kd      t     Ts   out_min out_max kaw
 PID pidL(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
 PID pidR(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
-PID steerPID(0.42f, 0.0f, 0.06f, 0.05f, 0.02f, -0.35f, 0.35f, 0.15f);
+PID steerPID(0.5f, 0.0f, 0.18f, 0.05f, 0.02f, -0.35f, 0.35f, 0.15f);
 
 DigitalOut C1(D2);
 DigitalOut C2(D3);
@@ -34,7 +37,7 @@ DigitalOut C5(PA_15);
 DigitalOut C6(PA_14);
 
 // ===== BUGGY =====
-Buggy buggy(motL, motR, pidL, pidR, steerPID, sensors, 0.1f);
+Buggy buggy(motL, motR, pidL, pidR, steerPID, sensors, 0.3f);
 
 // ===== BT COMMAND =====
 volatile char bt_cmd = 0;
@@ -45,6 +48,10 @@ Timer turnTimer;
 void rXIRQ() {
     char c = hm10.getc();
     bt_cmd = c;   // store latest command only
+}
+
+void sendpwm(void){
+    hm10.printf("PWML: %0.2f, PWMR: %0.2f\r\n", maxPWML, maxPWMR);
 }
 
 // ===== MAIN =====
@@ -78,6 +85,16 @@ int main() {
 
         // ===== NORMAL CONTROL UPDATE =====
         buggy.update();
+
+        if (buggy.rtnpwmL()>maxPWML){
+            maxPWML = buggy.rtnpwmL();
+            sendpwm();
+        }
+        if (buggy.rtnpwmR()>maxPWMR){
+            maxPWMR = buggy.rtnpwmR();
+            sendpwm();
+        }
+        
 
         // ===== LINE LOST AUTO STOP =====
         if (buggy.shouldStop()) {
