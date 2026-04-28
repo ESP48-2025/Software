@@ -126,7 +126,7 @@ public:
         float ctrlL = pidL.update(targetL, filtL);
         float ctrlR = pidR.update(targetR, filtR);
 
-        float kf = 0.6f;
+        float kf = 0.5f;
 
         pwmL = kf * targetL + ctrlL;
         pwmR = kf * targetR + ctrlR;
