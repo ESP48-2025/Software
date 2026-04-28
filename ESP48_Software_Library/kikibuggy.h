@@ -31,7 +31,7 @@ private:
     bool isRunning;
     bool lineLostFlag;
     
-    bool lineLostBuffer;    // 
+    int lineLostBuffer;    // 
 
     volatile bool inTurn;   // 
 
@@ -90,25 +90,18 @@ public:
         filtR = alphaR * speedR + (1.0f - alphaR) * filtR;
 
         if (sensors.isLineLost()) {
-            // if (lineLostDistance == 0){
-            //     lineLostTime.start();
-            // }
-            // lineLostDistance = (speedL + speedR)/2.0f * lineLostTime.read_ms();
-            // // average speed * time in lost line = lost distance
-            // if (lineLostDistance > 7){
-            //     lineLostTime.stop();
-            //     lineLostTime.reset();
-            //     lineLostDistance = 0;
-            //     // stop
-            //     left.setSpeed(0.0f);
-            //     right.setSpeed(0.0f);
-            //     lineLostFlag = true;
-            // }
-            // stop
-            left.setSpeed(0.0f);
-            right.setSpeed(0.0f);
-            lineLostFlag = true;
-            return;
+            if (lineLostBuffer == 2){
+                left.setSpeed(0.0f);
+                right.setSpeed(0.0f);
+                lineLostFlag = true;
+                return;
+            }
+            else{
+                lineLostBuffer++;
+            }
+        }
+        else{
+            lineLostBuffer = 0;
         }
 
         float position = sensors.getPosition();
