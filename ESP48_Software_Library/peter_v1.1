@@ -1,0 +1,210 @@
+#include "mbed.h"
+#include "Bluetooth.h"
+#include "Encoder.h"
+#include "Motor.h"
+#include "IR_array.h"
+#include "PID.h"
+
+// ==========================
+// Hardware objects
+// ==========================
+DigitalOut motorEnable(PA_13, 1);
+
+Motor motorLeft(D15, PC_9, PC_5);
+Motor motorRight(D14, PC_8, PC_6);
+
+Bluetooth ble;
+
+Encoder encR(PC_10, PC_12, 50.0f);
+Encoder encL(PC_11, PD_2, 50.0f);
+
+TCRT IRSensors(PC_2, PC_3, A2, A3, A4, A5, 200.0f);
+Darlington EnTcrt(D2, D3, D8, D9, PA_15, PA_14);
+
+// ==========================
+// Parameters
+// ==========================
+const float PWM_CENTER = 0.5f;
+
+const float LEFT_BIAS  = 0.00f;
+const float RIGHT_BIAS = 0.00f;
+
+// Outer-loop line PD
+const float KP_LINE = 0.20f;
+const float KD_LINE = 0.002f;
+
+// Inner-loop motor P first, no I for now
+const float KP_SPEED = 0.06f;
+const float KI_SPEED = 0.00f;
+
+// Match encoder sampling: 50 Hz = 20 ms
+const float DT = 0.02f;
+
+const bool WHITE_IS_HIGH = true;
+const float LINE_DETECT_THRESHOLD = 0.35f;
+
+// Speed targets
+const float BASE_TARGET_RPS   = 1.8f;
+const float MAX_TURN_DIFF_RPS = 0.6f;
+const float MIN_TARGET_RPS    = 0.4f;
+const float MAX_TARGET_RPS    = 2.5f;
+
+// Lost-line search
+const float SEARCH_PWM_OFFSET = 0.10f;
+
+// Limit motor output
+const float MAX_PWM_OFFSET = 0.35f;
+
+// ==========================
+// Helper functions
+// ==========================
+float clampf(float x, float low, float high) {
+    if (x < low) return low;
+    if (x > high) return high;
+    return x;
+}
+
+float processSensor(float x) {
+    x = clampf(x, 0.0f, 1.0f);
+
+    if (WHITE_IS_HIGH) {
+        return x;
+    } else {
+        return 1.0f - x;
+    }
+}
+
+void setMotorBipolar(float leftCmd, float rightCmd) {
+    leftCmd  = clampf(leftCmd,  0.0f, 1.0f);
+    rightCmd = clampf(rightCmd, 0.0f, 1.0f);
+
+    motorLeft.speed(leftCmd);
+    motorRight.speed(rightCmd);
+}
+
+void stopMotors() {
+    motorLeft.speed(PWM_CENTER);
+    motorRight.speed(PWM_CENTER);
+}
+
+float getLineError(float &strength) {
+    float s[6];
+
+    for (int i = 0; i < 6; i++) {
+        s[i] = processSensor(IRSensors.getCurrentSampleNorm(i));
+    }
+
+    const float w[6] = {-2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f};
+
+    float total = 0.0f;
+    float weightedSum = 0.0f;
+
+    for (int i = 0; i < 6; i++) {
+        total += s[i];
+        weightedSum += s[i] * w[i];
+    }
+
+    strength = total;
+
+    if (total < 1e-6f) {
+        return 0.0f;
+    }
+
+    return weightedSum / total;
+}
+
+// ==========================
+// Main
+// ==========================
+int main() {
+    ble.begin();
+
+    motorEnable = 1;
+
+    motorLeft.bipolar_mode(1);
+    motorRight.bipolar_mode(1);
+
+    motorLeft.pwm_period(50);
+    motorRight.pwm_period(50);
+
+    motorLeft.is_forward(0);
+    motorRight.is_forward(0);
+
+    EnTcrt.writeAll(1, 1, 1, 1, 1, 1);
+
+    PID pidL(1);
+    PID pidR(1);
+
+    pidL.setDT(DT);
+    pidR.setDT(DT);
+
+    pidL.setGain(KP_SPEED, KI_SPEED, 0.0f);
+    pidR.setGain(KP_SPEED, KI_SPEED, 0.0f);
+
+    stopMotors();
+    wait_ms(500);
+
+    ble.sendWords("TD3 line PD + motor P start");
+
+    float lastError = 0.0f;
+    float prevError = 0.0f;
+
+    float pwmL = PWM_CENTER;
+    float pwmR = PWM_CENTER;
+
+    while (1) {
+        IRSensors.update_sample();
+
+        float lineStrength = 0.0f;
+        float error = getLineError(lineStrength);
+
+        if (lineStrength < LINE_DETECT_THRESHOLD) {
+            if (lastError < 0.0f) {
+                setMotorBipolar(PWM_CENTER + SEARCH_PWM_OFFSET,
+                                PWM_CENTER - SEARCH_PWM_OFFSET);
+            } else {
+                setMotorBipolar(PWM_CENTER - SEARCH_PWM_OFFSET,
+                                PWM_CENTER + SEARCH_PWM_OFFSET);
+            }
+
+            pwmL = PWM_CENTER;
+            pwmR = PWM_CENTER;
+        } else {
+            lastError = error;
+
+            float dError = (error - prevError) / DT;
+            prevError = error;
+
+            float turnDiffRps = KP_LINE * error + KD_LINE * dError;
+            turnDiffRps = clampf(turnDiffRps, -MAX_TURN_DIFF_RPS, MAX_TURN_DIFF_RPS);
+
+            float targetL = BASE_TARGET_RPS + turnDiffRps;
+            float targetR = BASE_TARGET_RPS - turnDiffRps;
+
+            targetL = clampf(targetL, MIN_TARGET_RPS, MAX_TARGET_RPS);
+            targetR = clampf(targetR, MIN_TARGET_RPS, MAX_TARGET_RPS);
+
+            float actualL = encL.getRps();
+            float actualR = encR.getRps();
+
+            pidL.setReference(targetL);
+            pidR.setReference(targetR);
+
+            float outL = pidL.updatePID(actualL, pwmL);
+            float outR = pidR.updatePID(actualR, pwmR);
+
+            outL = clampf(outL, -MAX_PWM_OFFSET, MAX_PWM_OFFSET);
+            outR = clampf(outR, -MAX_PWM_OFFSET, MAX_PWM_OFFSET);
+
+            pwmL = PWM_CENTER + LEFT_BIAS  + outL;
+            pwmR = PWM_CENTER + RIGHT_BIAS + outR;
+
+            pwmL = clampf(pwmL, 0.0f, 1.0f);
+            pwmR = clampf(pwmR, 0.0f, 1.0f);
+
+            setMotorBipolar(pwmL, pwmR);
+        }
+
+        wait_ms(20);
+    }
+}
