@@ -24,10 +24,14 @@ private:
     float filtL;
     float filtR;
 
+    float pwmL, pwmR;
+
     float currentTarget;
 
     bool isRunning;
     bool lineLostFlag;
+    
+    bool lineLostBuffer;    // 
 
     volatile bool inTurn;   // 
 
@@ -86,6 +90,21 @@ public:
         filtR = alphaR * speedR + (1.0f - alphaR) * filtR;
 
         if (sensors.isLineLost()) {
+            // if (lineLostDistance == 0){
+            //     lineLostTime.start();
+            // }
+            // lineLostDistance = (speedL + speedR)/2.0f * lineLostTime.read_ms();
+            // // average speed * time in lost line = lost distance
+            // if (lineLostDistance > 7){
+            //     lineLostTime.stop();
+            //     lineLostTime.reset();
+            //     lineLostDistance = 0;
+            //     // stop
+            //     left.setSpeed(0.0f);
+            //     right.setSpeed(0.0f);
+            //     lineLostFlag = true;
+            // }
+            // stop
             left.setSpeed(0.0f);
             right.setSpeed(0.0f);
             lineLostFlag = true;
@@ -107,10 +126,10 @@ public:
         float ctrlL = pidL.update(targetL, filtL);
         float ctrlR = pidR.update(targetR, filtR);
 
-        float kf = 0.4f;
+        float kf = 0.6f;
 
-        float pwmL = kf * targetL + ctrlL;
-        float pwmR = kf * targetR + ctrlR;
+        pwmL = kf * targetL + ctrlL;
+        pwmR = kf * targetR + ctrlR;
 
         if (pwmL > 0.95f) pwmL = 0.95f;
         if (pwmL < 0.05f) pwmL = 0.05f;
@@ -120,6 +139,13 @@ public:
 
         left.setSpeed(pwmL);
         right.setSpeed(pwmR);
+    }
+
+    float rtnpwmL(void){
+        return pwmL;
+    }
+    float rtnpwmR(void){
+        return pwmR;
     }
 
     // ===== STOP =====
@@ -166,7 +192,7 @@ public:
         left.setSpeed(0.3f);
         right.setSpeed(0.3f);
 
-        wait_ms(1300);
+        wait_ms(1150);
 
         left.setSpeed(0.0f);
         right.setSpeed(0.0f);
