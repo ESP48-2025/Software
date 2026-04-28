@@ -27,7 +27,7 @@ LineSensor sensors(PC_2, PC_3, A2, A3, A4, A5);
 //        kp    ki     kd      t     Ts   out_min out_max kaw
 PID pidL(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
 PID pidR(1.6f, 0.5f, 0.01f, 0.05f, 0.02f, -0.5f, 0.6f, 0.6f);
-PID steerPID(0.5f, 0.0f, 0.18f, 0.05f, 0.02f, -0.35f, 0.35f, 0.15f);
+PID steerPID(0.9f, 0.0f, 0.4f, 0.05f, 0.02f, -0.35f, 0.35f, 0.15f);     // kp 0.6, kd 0.2
 
 DigitalOut C1(D2);
 DigitalOut C2(D3);
